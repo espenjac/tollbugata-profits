@@ -24,6 +24,7 @@ from typing import Any, Iterable, Optional
 from zoneinfo import ZoneInfo
 
 from .models import Stock
+from .signals import NewsSignal
 
 try:
     _OSLO = ZoneInfo("Europe/Oslo")
@@ -86,6 +87,17 @@ class NewsItem:
     message_id: int
     url: str
     sentiment: str = "neutral"  # "positive", "negative" eller "neutral"
+    event_type: str = "other"  # result, contract, capital_raise, insider, ...
+    relevance: str = "low"  # high, medium eller low
+
+
+@dataclass(frozen=True)
+class NewsClassification:
+    """Klassifisering av én overskrift før den blir et NewsItem."""
+
+    sentiment: str
+    event_type: str
+    relevance: str
 
 
 @dataclass(frozen=True)
@@ -117,6 +129,10 @@ class NewsFeed:
 
     def for_ticker(self, ticker: str) -> tuple[NewsItem, ...]:
         return self.items_by_ticker.get(_ticker_key(ticker), ())
+
+    def signal_for(self, stock: Stock) -> NewsSignal:
+        """Samlet signal for en aksje, klart til scoremodellen."""
+        return aggregate_news_signal(self.for_stock(stock))
 
     def is_new_since_open(self, item: NewsItem) -> bool:
         return self.session_open is not None and item.published_at >= self.session_open
@@ -291,6 +307,164 @@ def classify_sentiment(title: str) -> str:
     return "neutral"
 
 
+_CAPITAL_RAISE = (
+    r"\bemisjon",
+    r"\brettet\s+emisjon",
+    r"\bkapitalinnhenting",
+    r"\bprivate\s+placement",
+    r"\brights?\s+issue",
+    r"\bcapital\s+raise",
+    r"\bshare\s+issue",
+    r"\bny\s+aksjekapital",
+)
+_RESULT = (
+    r"\bkvartalsrapport",
+    r"\bhalvårsrapport",
+    r"\bårsrapport",
+    r"\bquarterly\s+(?:report|results?)",
+    r"\bannual\s+report",
+    r"\binterim\s+report",
+    r"\bq[1-4]\s*(?:20\d{2}|rapport|report)",
+    r"\bresultat(?:varsel|rapport)?\b",
+)
+_CONTRACT = (
+    r"\bkontrakt",
+    r"\bcontract",
+    r"\bordre\b",
+    r"\border\b",
+    r"\btildelt",
+    r"\bawarded",
+    r"\bbacklog",
+    r"\bavtale",
+    r"\bagreement",
+)
+_INSIDER = (
+    r"\bprimærinnsider",
+    r"\binnsider",
+    r"\binsider",
+    r"\bmeldepliktig\s+handel",
+    r"\bmandatory\s+notification\s+of\s+trade",
+)
+_ACQUISITION = (
+    r"\boppkjøp",
+    r"\bacquisition",
+    r"\bfusjon",
+    r"\bmerger",
+    r"\bdivest",
+    r"\bsalg\s+av\s+virksomhet",
+    r"\bstrategisk",
+    r"\bstrategic",
+)
+_DIVIDEND = (
+    r"\butbytte",
+    r"\bdividend",
+    r"\bex[- ]?dato",
+    r"\bex[- ]?date",
+)
+_LOW_RELEVANCE = (
+    r"\bfinancial\s+calendar",
+    r"\bfinansiell\s+kalender",
+    r"\bkalender",
+    r"\bpresentasjon",
+    r"\bpresentation",
+    r"\binvitasjon",
+    r"\binvitation",
+)
+
+
+def _matches(text: str, patterns: tuple[str, ...]) -> bool:
+    return any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns)
+
+
+def classify_news(title: str, category: str = "") -> NewsClassification:
+    """Klassifiser både sentiment, hendelsestype og omtrentlig relevans.
+
+    Dette er bevisst konservativt. En emisjon, et resultatvarsel eller et salg
+    fra innsidere skal ikke bli positivt bare fordi overskriften også inneholder
+    ord som «vekst» eller «avtale».
+    """
+    text = " ".join(str(title or "").split())
+    context = f"{text} {category or ''}".strip()
+    if not context:
+        return NewsClassification("neutral", "other", "low")
+
+    sentiment = classify_sentiment(text)
+    event_type = "other"
+    relevance = "low"
+
+    if _matches(context, _CAPITAL_RAISE):
+        event_type = "capital_raise"
+        relevance = "high"
+        sentiment = "negative"
+    elif re.search(r"\bprofit\s+warning\b|\bresultatvarsel\b", context, re.IGNORECASE):
+        event_type = "result"
+        relevance = "high"
+        sentiment = "negative"
+    elif _matches(context, _RESULT):
+        event_type = "result"
+        relevance = "high"
+    elif _matches(context, _CONTRACT):
+        event_type = "contract"
+        relevance = "high" if _matches(
+            context,
+            (r"\btildelt", r"\bawarded", r"\bkontrakt", r"\bcontract", r"\bordre\b"),
+        ) else "medium"
+    elif _matches(context, _INSIDER):
+        event_type = "insider"
+        relevance = "high"
+        if re.search(r"\bsalg\b|\bselger\b|\bsold\b|\bsale\b", context, re.IGNORECASE):
+            sentiment = "negative"
+        elif re.search(r"\bkjøp\b|\bkjøper\b|\bbought\b|\bpurchase\b", context, re.IGNORECASE):
+            sentiment = "positive"
+    elif _matches(context, _ACQUISITION):
+        event_type = "acquisition"
+        relevance = "high"
+    elif _matches(context, _DIVIDEND):
+        event_type = "dividend"
+        relevance = "medium"
+
+    if _matches(context, _LOW_RELEVANCE):
+        relevance = "low"
+    if event_type == "other" and sentiment in ("positive", "negative"):
+        relevance = "medium"
+
+    return NewsClassification(sentiment, event_type, relevance)
+
+
+def aggregate_news_signal(items: Iterable[NewsItem]) -> NewsSignal:
+    """Slå sammen flere meldinger til ett signal uten å dobbelttelle duplikater."""
+    unique = unique_news(items)
+    if not unique:
+        return NewsSignal()
+    sentiment = aggregate_sentiment(unique)
+    relevance_rank = {"low": 0, "medium": 1, "high": 2}
+    relevance = max((item.relevance for item in unique), key=lambda value: relevance_rank.get(value, 0))
+    event_priority = {
+        "capital_raise": 6,
+        "result": 5,
+        "contract": 4,
+        "insider": 3,
+        "acquisition": 2,
+        "dividend": 1,
+        "other": 0,
+    }
+    # En negativ hendelse skal ikke skjules bak en positiv melding med høyere prioritet.
+    negative = [
+        item for item in unique
+        if item.sentiment == "negative" and item.relevance in ("high", "medium")
+    ]
+    candidates = negative or unique
+    event_type = max(candidates, key=lambda item: event_priority.get(item.event_type, 0)).event_type
+    latest = unique[0]
+    return NewsSignal(
+        sentiment=sentiment,
+        relevance=relevance,
+        event_type=event_type,
+        count=len(unique),
+        latest_title=latest.title,
+    )
+
+
 def aggregate_sentiment(items: Iterable[NewsItem]) -> str:
     """Samlet sentiment for en aksje, uten å dobbelttelle norsk/engelsk."""
     unique = unique_news(items)
@@ -354,14 +528,20 @@ def unique_news(
     items: Iterable[NewsItem],
     limit: Optional[int] = None,
 ) -> list[NewsItem]:
-    """Fjerner norsk/engelsk-duplikater og beholder nyeste per minutt.
+    """Fjerner norsk/engelsk-duplikater og beholder nyeste per hendelse.
 
     NewsWeb publiserer ofte samme sak på begge språk med nesten identisk
-    tidspunkt. Vi viser én overskrift per minutt og foretrekker den norske.
+    tidspunkt. Vi slår bare sammen meldinger innenfor samme minutt når de har
+    samme sentiment og hendelsestype. Da kan en emisjon og en positiv kontrakt
+    publisert samtidig begge bli med, og en negativ melding blir ikke skjult.
     """
-    best: dict[str, NewsItem] = {}
+    best: dict[tuple[str, str, str], NewsItem] = {}
     for item in items:
-        key = item.published_at.strftime("%Y-%m-%dT%H:%M")
+        key = (
+            item.published_at.strftime("%Y-%m-%dT%H:%M"),
+            item.sentiment,
+            item.event_type,
+        )
         current = best.get(key)
         if current is None or _norwegian_score(item.title) > _norwegian_score(
             current.title
@@ -407,15 +587,19 @@ def parse_news_payload(
         if not title:
             continue
         issuer_name = _clean_title(message.get("issuerName")) or ticker
+        category = _category(message)
+        classification = classify_news(title, category)
         item = NewsItem(
             ticker=ticker,
             issuer_name=issuer_name,
             title=title,
             published_at=published,
-            category=_category(message),
+            category=category,
             message_id=message_id,
             url=NEWS_MESSAGE_URL.format(message_id=message_id),
-            sentiment=classify_sentiment(title),
+            sentiment=classification.sentiment,
+            event_type=classification.event_type,
+            relevance=classification.relevance,
         )
         by_ticker.setdefault(_ticker_key(ticker), []).append(item)
         by_name.setdefault(_name_key(issuer_name), []).append(item)

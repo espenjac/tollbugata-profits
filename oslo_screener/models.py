@@ -38,6 +38,7 @@ class Stock:
     ex_dividend_date: Optional[date] = None
     average_volume_10d: Optional[float] = None
     atr: Optional[float] = None
+    spread_pct: Optional[float] = None  # relativ spread hvis kilden oppgir den
 
     @property
     def is_growth(self) -> bool:

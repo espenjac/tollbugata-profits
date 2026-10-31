@@ -17,6 +17,7 @@ from .formatting import (
     format_datetime,
     format_days_until,
     format_market_cap,
+    format_money,
     format_pct,
     format_price,
 )
@@ -31,6 +32,12 @@ from .logic import (
 from .models import Stock
 from .news import NewsFeed, NewsItem, aggregate_sentiment, unique_news
 from .nordnet import nordnet_url
+from .premarket import (
+    PlannedCandidate,
+    PremarketReport,
+    build_premarket_report,
+)
+from .signals import EVENT_LABELS, RELEVANCE_LABELS
 from .strategy import Candidate, rank_candidates
 
 # ---------------------------------------------------------------------------
@@ -109,6 +116,119 @@ def _next_event_text(stock: Stock) -> tuple[str, bool]:
     return " · ".join(parts), soon
 
 
+def _terminal_premarket(report: PremarketReport, color: bool) -> list[str]:
+    lines: list[str] = []
+    lines.append(
+        _paint(
+            f"Dagens pre-market-rapport · {format_datetime(report.generated_at)}",
+            _BOLD,
+            color,
+        )
+    )
+    lines.append(_paint(report.data_basis, _DIM, color))
+    if report.main is None:
+        lines.append(
+            _paint(
+                "Ingen anbefalte kandidater i dag – vurder å stå over.",
+                _YELLOW,
+                color,
+            )
+        )
+        if report.no_trade_reason:
+            lines.append(_paint(f"  {report.no_trade_reason}", _DIM, color))
+    else:
+        main = report.main
+        candidate = main.candidate
+        trade = main.trade
+        lines.append(
+            _paint(
+                f"HOVEDKANDIDAT: {candidate.stock.ticker} · {candidate.stock.name}",
+                _GREEN,
+                color,
+            )
+        )
+        lines.append(
+            f"  Total {candidate.score:.0f}/100 · mulighet {candidate.opportunity_score:.0f}"
+            f" · risiko {candidate.risk_score:.0f} ({candidate.risk_level})"
+            f" · {', '.join(main.category_labels) or 'ingen kategori'}"
+        )
+        lines.append(
+            f"  Kjøpsestimat {format_price(trade.entry_price)} kr · {trade.shares} aksjer"
+            f" · kapital {format_money(trade.total_cost)}"
+            f" · mål {format_price(trade.target_price)} kr"
+            f" · stopp {format_price(trade.stop_price)} kr"
+        )
+        lines.append(
+            f"  Netto ved +{report.settings.trade.target_pct * 100:.0f} %:"
+            f" {format_money(trade.target_net, signed=True)} ({format_pct(trade.target_return_pct / 100)})"
+            f" · ved −{report.settings.trade.stop_loss_pct * 100:.0f} %:"
+            f" {format_money(trade.stop_net, signed=True)} ({format_pct(trade.stop_return_pct / 100)})"
+        )
+        up = " · ".join(
+            f"{format_pct(item.change_pct, signed=True)}: "
+            f"{format_money(item.net_profit, signed=True)}"
+            for item in trade.scenarios
+            if item.change_pct > 0
+        )
+        down = " · ".join(
+            f"{format_pct(item.change_pct, signed=True)}: "
+            f"{format_money(item.net_profit, signed=True)}"
+            for item in trade.scenarios
+            if item.change_pct < 0
+        )
+        if up:
+            lines.append(f"  Netto scenarier opp: {up}")
+        if down:
+            lines.append(f"  Netto scenarier ned: {down}")
+        lines.append(
+            f"  Nyheter: {main.news_reason}"
+        )
+        if candidate.warnings:
+            lines.append(_paint(f"  Risiko: {' · '.join(candidate.warnings)}", _YELLOW, color))
+        lines.append(
+            _paint(
+                "  Følg med: bekreft kurs over siste sluttkurs, volum og spread etter åpning. "
+                "Ingen automatisk handel.",
+                _DIM,
+                color,
+            )
+        )
+    if report.alternatives:
+        lines.append("")
+        lines.append(
+            _paint(
+                "Alternativer (5–10, ikke nødvendigvis anbefalt):",
+                _BOLD,
+                color,
+            )
+        )
+        for index, item in enumerate(report.alternatives, 1):
+            candidate = item.candidate
+            categories = ", ".join(item.category_labels) or "ingen kategori"
+            lines.append(
+                f"  {index}. {_fit(candidate.stock.ticker, 9)} "
+                f"{candidate.score:3.0f} total · risiko {candidate.risk_score:3.0f} · "
+                f"{_fit(candidate.stock.name, 22)} · {categories}"
+            )
+            if item.block_reasons:
+                lines.append(
+                    _paint(
+                        f"     Ikke anbefalt: {'; '.join(item.block_reasons)}",
+                        _YELLOW,
+                        color,
+                    )
+                )
+            else:
+                lines.append(
+                    _paint("     Kan vurderes som alternativ.", _DIM, color)
+                )
+    if report.warnings:
+        for warning in report.warnings:
+            lines.append(_paint(f"Advarsel: {warning}", _YELLOW, color))
+    lines.append("")
+    return lines
+
+
 def render_terminal(
     result: ScreenResult,
     universe: Universe,
@@ -117,6 +237,7 @@ def render_terminal(
     limit: int = 40,
     color: Optional[bool] = None,
     news: Optional[NewsFeed] = None,
+    report: Optional[PremarketReport] = None,
 ) -> str:
     if color is None:
         import sys
@@ -126,7 +247,8 @@ def render_terminal(
     stocks = sort_stocks(result.matches, sort_by)
     total = len(stocks)
     shown = stocks if limit <= 0 else stocks[:limit]
-    candidates = rank_candidates(stocks, limit=5)
+    if report is None:
+        report = build_premarket_report(stocks, criteria, universe, news=news)
 
     width = _terminal_width()
     show_next = width >= 108
@@ -148,7 +270,7 @@ def render_terminal(
 
     lines: list[str] = []
     title = "Tollbugata Profits"
-    subtitle = "Oslo Børs · ukescreen"
+    subtitle = "Oslo Børs · pre-market daytrading"
     lines.append(_paint(title, _BOLD, color) + _paint(f"  {subtitle}", _DIM, color))
     source_label = {"live": "live", "cache": "cache", "stale-cache": "gammel cache"}.get(
         universe.source, universe.source
@@ -169,29 +291,7 @@ def render_terminal(
     lines.append(_paint(f"Kriterier: {describe_criteria(criteria)}", _DIM, color))
     if universe.warning:
         lines.append(_paint(f"Advarsel: {universe.warning}", _YELLOW, color))
-    if candidates:
-        lines.append(
-            _paint(
-                "Topp 5 kandidater (teknisk rangering – ikke kjøpssignal):",
-                _BOLD,
-                color,
-            )
-        )
-        for index, candidate in enumerate(candidates, 1):
-            prefix = (
-                f"  {index}. {_fit(candidate.stock.ticker, 9)} "
-                f"{_fit(candidate.stock.name, 22)} {candidate.score:3.0f}  "
-            )
-            if news is not None:
-                candidate_news = news.for_stock(candidate.stock)
-                if candidate_news:
-                    prefix += (
-                        f"📰{_sentiment_symbol(aggregate_sentiment(candidate_news))} "
-                    )
-            detail = " · ".join(candidate.reasons)
-            if candidate.warnings:
-                detail += "  ⚠ " + candidate.warnings[0]
-            lines.append(prefix + _fit(detail, max(20, width - len(prefix))))
+    lines.extend(_terminal_premarket(report, color))
     if news is not None:
         news_rows: list[tuple[datetime, Stock, tuple[NewsItem, ...]]] = []
         for stock in stocks:
@@ -334,7 +434,7 @@ def render_terminal(
             "R = dager til resultat, E = dager til ex-dato. "
             "📰 = børsmelding siden forrige handelsdag; "
             "▲/▼/◆/• = positiv/negativ/blandet/nøytral. "
-            "Topp 5 = teknisk rangering, ikke kjøpssignal. "
+            "Hovedkandidat og alternativer er en relativ rangering, ikke kjøpssignal. "
             "Euronext Growth er skjult som standard (normalt ikke ASK-egnet). "
             "* ATH usikker (mulig splitt). Ikke investeringsråd.",
             _DIM,
@@ -678,6 +778,88 @@ h1 {
   letter-spacing: .08em;
   text-transform: uppercase;
 }
+.report {
+  margin: 0 0 18px;
+  padding: 20px 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: linear-gradient(155deg, rgba(22, 35, 61, .96), rgba(13, 21, 39, .96));
+  box-shadow: var(--shadow);
+}
+.report-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+}
+.report-head h2 { margin: 2px 0 4px; font-size: 22px; letter-spacing: -.02em; }
+.report-head p { max-width: 780px; margin: 0; color: var(--muted); font-size: 12.5px; }
+.report-stamp {
+  flex: 0 0 auto;
+  padding: 10px 13px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(17, 27, 49, .72);
+  text-align: right;
+  color: var(--muted);
+  font-size: 10.5px;
+}
+.report-stamp span { display: block; text-transform: uppercase; letter-spacing: .06em; }
+.report-stamp strong { display: block; margin: 2px 0; color: var(--text); font-size: 12px; }
+.report-stamp small { color: var(--muted-2); }
+.main-pick {
+  padding: 18px;
+  border: 1px solid rgba(94, 234, 212, .28);
+  border-radius: 14px;
+  background: radial-gradient(700px 260px at 10% 0%, rgba(94, 234, 212, .08), transparent 65%),
+              rgba(17, 27, 49, .62);
+}
+.main-pick-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.main-reasons { margin: 8px 0 3px; color: #d7e6ff; font-size: 13px; font-variant-numeric: tabular-nums; }
+.score-row { display: grid; grid-template-columns: repeat(3, minmax(74px, 1fr)); gap: 8px; }
+.score-box {
+  min-width: 76px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(8, 13, 25, .55);
+  text-align: right;
+}
+.score-box span { display: block; color: var(--muted); font-size: 9.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.score-box strong { display: block; color: var(--accent); font-size: 25px; line-height: 1.05; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.score-box small { display: block; color: var(--muted-2); font-size: 9px; }
+.report-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 16px 0; }
+.report-grid > div { padding: 10px 12px; border: 1px solid var(--border-soft); border-radius: 10px; background: rgba(8, 13, 25, .3); }
+.report-grid span { display: block; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.report-grid strong { display: block; margin: 3px 0 1px; color: var(--text); font-size: 17px; font-variant-numeric: tabular-nums; }
+.report-grid small { color: var(--muted-2); font-size: 10.5px; }
+.report-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin: 8px 0 16px; }
+.report h3 { margin: 16px 0 7px; color: var(--text); font-size: 14px; letter-spacing: -.01em; }
+.report-cols h3:first-child { margin-top: 0; }
+.report-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: 12.5px; }
+.report-list li::before { content: "· "; color: var(--accent); }
+.report-list.warnings li::before { content: "⚠ "; color: var(--amber); }
+.report-news { margin: 0 0 4px; color: var(--text); font-size: 12.5px; }
+.report-news-title { margin: 0; color: #bfe9ff; font-size: 12.5px; overflow-wrap: anywhere; }
+.report-news-title a { color: #bfe9ff; text-decoration: none; }
+.report-news-title a:hover { color: var(--accent); text-decoration: underline; }
+.report-note { margin: 8px 0 0; color: var(--muted-2); font-size: 11px; }
+.no-trade { padding: 22px; border: 1px solid rgba(251, 191, 36, .40); border-radius: 12px; background: rgba(251, 191, 36, .08); }
+.no-trade h3 { margin: 0 0 6px; color: #ffe4a3; font-size: 18px; }
+.no-trade p { margin: 0; color: #ffe4a3; font-size: 13px; }
+.cat-badge { display: inline-block; margin-left: 4px; padding: 1px 6px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-family: var(--sans); font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.cat-momentum { border-color: rgba(94, 234, 212, .40); color: #9ff5e7; }
+.cat-breakout { border-color: rgba(56, 189, 248, .45); color: #7dd3fc; }
+.cat-nyhetsdrevet { border-color: rgba(251, 191, 36, .45); color: #ffd77a; }
+.pick-trade { margin: 3px 0 0; color: #bfe9ff; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.score-sub { display: block; margin-top: 2px; color: var(--muted-2); font-family: var(--sans); font-size: 8.5px; font-weight: 600; letter-spacing: 0; white-space: nowrap; }
+.mini-table { font-size: 12.5px; }
+.mini-table th { padding: 9px 11px; }
+.mini-table td { padding: 8px 11px; }
+.risk-low { color: var(--green); }
+.risk-medium { color: var(--amber); }
+.risk-high { color: var(--red); }
 .panel {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -846,6 +1028,11 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: now
   .picks-head { flex-direction: column; }
   .pick { grid-template-columns: 26px minmax(0, 1fr); }
   .pick-score { grid-column: 2; font-size: 20px; text-align: left; }
+  .report { padding: 16px; }
+  .report-head, .main-pick-head { flex-direction: column; }
+  .report-stamp { text-align: left; }
+  .report-cols { grid-template-columns: 1fr; gap: 4px; }
+  .score-row { width: 100%; }
   .news { padding: 16px; }
   .news-head { flex-direction: column; }
   .news-list { grid-template-columns: 1fr; }
@@ -1117,12 +1304,20 @@ def _stock_row(
     )
 
 
+def _category_badges(labels: tuple[str, ...]) -> str:
+    return "".join(
+        f'<span class="cat-badge cat-{_e(label.lower())}">{_e(label)}</span>'
+        for label in labels
+    )
+
+
 def _candidate_card(
     rank: int,
     candidate: Candidate,
     at_high: bool,
     news_items: tuple[NewsItem, ...] = (),
     news_feed: Optional[NewsFeed] = None,
+    planned: Optional[PlannedCandidate] = None,
 ) -> str:
     stock = candidate.stock
     badge = (
@@ -1152,6 +1347,34 @@ def _candidate_card(
             f'<span class="muted">({_e(count_label)}{_e(new_label)} '
             f"siden forrige handelsdag)</span></p>"
         )
+    categories = (
+        _category_badges(planned.category_labels)
+        if planned is not None
+        else _category_badges(
+            tuple(
+                {"momentum": "Momentum", "breakout": "Breakout", "news": "Nyhetsdrevet"}.get(
+                    value, value
+                )
+                for value in candidate.categories
+            )
+        )
+    )
+    planned_html = ""
+    if planned is not None:
+        trade = planned.trade
+        blocked = ""
+        if planned.block_reasons:
+            blocked = (
+                f'<p class="pick-warnings">Ikke anbefalt: '
+                f'{_e("; ".join(planned.block_reasons))}</p>'
+            )
+        planned_html = (
+            f'<p class="pick-trade">{trade.shares} aksjer · '
+            f'kapital {_e(format_money(trade.total_cost))} · '
+            f'mål {_e(format_price(trade.target_price))} kr · '
+            f'stopp {_e(format_price(trade.stop_price))} kr</p>'
+            f"{blocked}"
+        )
     return (
         f'<li class="pick">'
         f'<span class="pick-rank">{rank}</span>'
@@ -1162,13 +1385,17 @@ def _candidate_card(
         f"{_e(stock.ticker)}</a>"
         f"{badge}"
         f'<span class="pick-name">{_e(stock.name)}</span>'
+        f"{categories}"
         f"</div>"
         f'<p class="pick-reasons">{_e(" · ".join(candidate.reasons))}</p>'
+        f"{planned_html}"
         f"{news_html}"
         f"{warnings}"
         f"</div>"
-        f'<span class="pick-score" title="Teknisk score 0–100">'
-        f'{candidate.score:.0f}<small>score</small></span>'
+        f'<span class="pick-score" title="Samlet relativ poengsum 0–100">'
+        f'{candidate.score:.0f}<small>total</small>'
+        f'<span class="score-sub">M {candidate.opportunity_score:.0f} · '
+        f'R {candidate.risk_score:.0f}</span></span>'
         f"</li>"
     )
 
@@ -1211,6 +1438,336 @@ def _render_candidates(
         '<section class="picks" aria-label="Topp 5 kandidater">'
         f"{head}"
         f'<ol class="pick-list">{cards}</ol>'
+        "</section>"
+    )
+
+
+def _score_box(label: str, value: float, extra: str = "") -> str:
+    return (
+        f'<div class="score-box">'
+        f'<span>{_e(label)}</span>'
+        f'<strong>{value:.0f}</strong>'
+        f'<small>{_e(extra)}</small>'
+        f"</div>"
+    )
+
+
+def _planned_news_html(
+    planned: PlannedCandidate,
+    news: Optional[NewsFeed],
+) -> str:
+    candidate = planned.candidate
+    signal = candidate.news_signal
+    if signal.count == 0:
+        return '<p class="muted">Ingen relevante børsmeldinger i nyhetsvinduet.</p>'
+    event = EVENT_LABELS.get(signal.event_type, signal.event_type)
+    relevance = RELEVANCE_LABELS.get(signal.relevance, signal.relevance)
+    items = news.for_stock(candidate.stock) if news is not None else ()
+    latest_link = ""
+    if items:
+        latest = unique_news(items, limit=1)[0]
+        latest_link = (
+            f'<a href="{_e(latest.url)}" target="_blank" rel="noopener noreferrer">'
+            f"{_e(latest.title)}</a>"
+        )
+    else:
+        latest_link = _e(signal.latest_title)
+    new_count = news.new_count(items) if news is not None and items else 0
+    new_text = (
+        f" · {_new_label(new_count)} siden åpning" if new_count else ""
+    )
+    return (
+        f'<p class="report-news">{_sentiment_html(signal.sentiment)} '
+        f'<span class="muted">· {_e(event)} · relevans {_e(relevance)} · '
+        f"{signal.count} melding{'er' if signal.count != 1 else ''}{new_text}</span></p>"
+        f'<p class="report-news-title">{latest_link}</p>'
+    )
+
+
+def _scenario_table(planned: PlannedCandidate) -> str:
+    rows = "".join(
+        f"<tr><td>{format_pct(item.change_pct, signed=True)}</td>"
+        f"<td>{_e(format_price(item.exit_price))} kr</td>"
+        f"<td class=\"{'pos' if item.net_profit > 0 else 'neg'}\">"
+        f"{_e(format_money(item.net_profit, signed=True))}</td>"
+        f"<td class=\"{'pos' if item.net_profit > 0 else 'neg'}\">"
+        f"{_e(format_pct(item.net_return_pct / 100))}</td></tr>"
+        for item in planned.trade.scenarios
+    )
+    return (
+        '<div class="table-wrap">'
+        '<table class="mini-table"><thead><tr>'
+        "<th>Bevegelse</th><th>Salgskurs</th><th>Netto etter kurtasje</th>"
+        "<th>Netto avkastning</th></tr></thead>"
+        f"<tbody>{rows}</tbody></table></div>"
+    )
+
+
+def _premarket_section(
+    report: PremarketReport,
+    criteria: Criteria,
+    news: Optional[NewsFeed] = None,
+) -> str:
+    categories = {"momentum": 0, "breakout": 0, "news": 0}
+    for planned in report.ranked:
+        for category in planned.candidate.categories:
+            categories[category] = categories.get(category, 0) + 1
+    category_chips = "".join(
+        f'<span class="chip">{_e(label)} <strong>{categories[key]}</strong></span>'
+        for key, label in (
+            ("momentum", "Momentum"),
+            ("breakout", "Breakout"),
+            ("news", "Nyhetsdrevet"),
+        )
+    )
+    stamp = (
+        '<div class="report-stamp">'
+        f"<span>Rapport generert</span><strong>{_e(format_datetime(report.generated_at))}</strong>"
+        f"<small>{'før børsåpning' if report.is_premarket else 'etter børsåpning – estimat'}</small>"
+        "</div>"
+    )
+    head = (
+        '<div class="report-head"><div>'
+        '<p class="eyebrow">Pre-market · Oslo Børs</p>'
+        "<h2>Dagens hovedkandidat</h2>"
+        f"<p>{_e(report.data_basis)} Kandidatene er et teknisk utgangspunkt. "
+        "Ikke et kjøpssignal – bekreft etter åpning.</p>"
+        "</div>"
+        f"{stamp}</div>"
+    )
+
+    if report.main is None:
+        alternatives = "".join(
+            _candidate_card(
+                index,
+                item.candidate,
+                is_at_high(item.candidate.stock, criteria),
+                news.for_stock(item.candidate.stock) if news is not None else (),
+                news,
+                planned=item,
+            )
+            for index, item in enumerate(report.alternatives, 1)
+        )
+        body = (
+            '<div class="no-trade">'
+            "<h3>Ingen anbefalte kandidater i dag – vurder å stå over.</h3>"
+            f"<p>{_e(report.no_trade_reason or 'Kandidatene oppfyller ikke kravene til score, risiko og likviditet.')}</p>"
+            f'<ul class="report-list warnings">{"".join(f"<li>{_e(item)}</li>" for item in report.warnings)}</ul>'
+            "</div>"
+            f'<div class="chips">{category_chips}</div>'
+        )
+        if alternatives:
+            body += (
+                "<h3>Mulige alternativer – ikke anbefalt som hovedhandel</h3>"
+                f'<ol class="pick-list">{alternatives}</ol>'
+            )
+        return (
+            '<section class="report no-trade-report" aria-label="Dagens pre-market-rapport">'
+            f"{head}{body}</section>"
+        )
+
+    main = report.main
+    candidate = main.candidate
+    stock = candidate.stock
+    trade = main.trade
+    warnings = "".join(f"<li>{_e(item)}</li>" for item in candidate.warnings)
+    report_warnings = "".join(f"<li>{_e(item)}</li>" for item in report.warnings)
+    reasons = "".join(f"<li>{_e(item)}</li>" for item in candidate.reasons)
+    categories_html = _category_badges(main.category_labels) or '<span class="muted">Ingen kategori</span>'
+    resistance_text = (
+        f"{_e(format_price(candidate.resistance))} kr "
+        f"({_e(format_pct(candidate.technical_upside))})"
+        if candidate.resistance is not None
+        else "Åpent rom over kjent topp"
+    )
+    support_text = (
+        f"{_e(format_price(candidate.support))} kr"
+        if candidate.support is not None
+        else "Ingen tydelig støtte i datagrunnlaget"
+    )
+    risk_class = {
+        "Lav": "risk-low",
+        "Middels": "risk-medium",
+        "Høy": "risk-high",
+    }.get(candidate.risk_level, "risk-medium")
+    alt_cards = "".join(
+        _candidate_card(
+            index,
+            item.candidate,
+            is_at_high(item.candidate.stock, criteria),
+            news.for_stock(item.candidate.stock) if news is not None else (),
+            news,
+            planned=item,
+        )
+        for index, item in enumerate(report.alternatives, 1)
+    )
+    body = f"""
+      <div class="main-pick">
+        <div class="main-pick-head">
+          <div>
+            <div class="pick-title">
+              <a class="pick-ticker" href="{_e(nordnet_url(stock))}" target="_blank" rel="noopener noreferrer">{_e(stock.ticker)}</a>
+              <span class="pick-name">{_e(stock.name)}</span>
+              {categories_html}
+            </div>
+            <p class="main-reasons">{_e(" · ".join(candidate.reasons))}</p>
+            <p class="muted">{_e(stock.sector)} · {_e(format_market_cap(stock.market_cap))} · RSI {_e(DASH if stock.rsi is None else f"{stock.rsi:.0f}")}</p>
+          </div>
+          <div class="score-row">
+            {_score_box("Total", candidate.score, "relativ poengsum")}
+            {_score_box("Mulighet", candidate.opportunity_score, "teknisk + nyheter")}
+            {_score_box("Risiko", candidate.risk_score, candidate.risk_level)}
+          </div>
+        </div>
+        <div class="report-grid">
+          <div><span>Siste sluttkurs</span><strong>{_e(format_price(stock.close))} kr</strong><small>estimat for neste åpning</small></div>
+          <div><span>Antall aksjer</span><strong>{trade.shares}</strong><small>hele aksjer, ikke brøkdeler</small></div>
+          <div><span>Kapitalbruk</span><strong>{_e(format_money(trade.total_cost))}</strong><small>inkl. kurtasje {_e(format_money(trade.buy_fee))} kjøp / {_e(format_money(trade.sell_fee))} salg</small></div>
+          <div><span>Gevinstmål</span><strong>{_e(format_price(trade.target_price))} kr</strong><small>{_e(format_pct(report.settings.trade.target_pct))} · netto {_e(format_money(trade.target_net, signed=True))}</small></div>
+          <div><span>Tapsgrense</span><strong>{_e(format_price(trade.stop_price))} kr</strong><small>{_e(format_pct(-report.settings.trade.stop_loss_pct))} · netto {_e(format_money(trade.stop_net, signed=True))}</small></div>
+          <div><span>Gevinst/tap</span><strong>{_e(DASH if trade.reward_risk is None else f"{trade.reward_risk:.1f}:1")}</strong><small>etter kurtasje</small></div>
+        </div>
+        <div class="report-cols">
+          <div>
+            <h3>Hvorfor denne aksjen</h3>
+            <ul class="report-list">{reasons}</ul>
+            <h3>Tekniske nivåer</h3>
+            <ul class="report-list">
+              <li>Motstand: {resistance_text}</li>
+              <li>Støtte: {support_text}</li>
+              <li>Breakout-status: {_e(candidate.breakout_status)}</li>
+              <li>Volumforhold: {_e(DASH if candidate.volume_ratio is None else f"{candidate.volume_ratio:.1f}×")}</li>
+              <li>ATR: {_e(format_pct(stock.atr_pct))}</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Nyheter og hendelsestype</h3>
+            {_planned_news_html(main, news)}
+            <h3>Risiko og forbehold</h3>
+            <ul class="report-list warnings">{warnings}{report_warnings}</ul>
+            <p class="muted">Sjekk spread, volum og nyheter etter åpning. Rapporten utfører ingen handler.</p>
+          </div>
+        </div>
+        <h3>Gevinst- og tapsscenarioer</h3>
+        {_scenario_table(main)}
+        <p class="report-note">Kjøpsprisen er estimert fra siste sluttkurs. Faktisk åpningskurs, spread og kurtasje kan avvike. Scenariene er netto etter kurtasje og eventuell konfigurert slippage, men før skatt.</p>
+        <h3>Følg med etter åpning</h3>
+        <p class="report-note">Bekreft at kursen holder seg over siste sluttkurs og SMA5 ({_e(format_price(stock.sma5))} kr), at volumet er unormalt høyt, og at spreaden er akseptabel. Ved negativ nyhet eller brudd på støtten: vurder å stå over eller bruk tapsgrensen.</p>
+      </div>
+      <div class="chips">{category_chips}</div>
+      <h3>Alternativer ({len(report.alternatives)})</h3>
+      <p class="muted">Kandidatene er rangert etter samlet score. Kortene viser også hva som taler imot.</p>
+      <ol class="pick-list">{alt_cards or '<li class="muted">Ingen alternativer.</li>'}</ol>
+    """
+    return (
+        '<section class="report" aria-label="Dagens pre-market-rapport">'
+        f"{head}{body}</section>"
+    )
+
+
+def _backtest_section(backtest: Optional[dict]) -> str:
+    if not backtest:
+        return (
+            '<section class="report backtest" aria-label="Historisk test">'
+            "<h2>Historisk test</h2>"
+            "<p>Ingen lagret backtest funnet. Kjør for eksempel "
+            "<code>python backtest.py --csv historiske_daglige_data.csv</code> "
+            "og start appen på nytt for å vise resultatene.</p>"
+            "</section>"
+        )
+
+    def _row(label: str, data: dict) -> str:
+        return (
+            f"<tr><td>{_e(label)}</td><td>{data.get('trades', 0)}</td>"
+            f"<td>{data.get('hit_rate_pct', 0):.1f} %</td>"
+            f"<td>{data.get('stop_rate_pct', 0):.1f} %</td>"
+            f"<td>{data.get('win_rate_pct', 0):.1f} %</td>"
+            f"<td class=\"{'pos' if data.get('avg_net_profit', 0) > 0 else 'neg'}\">"
+            f"{_e(format_money(data.get('avg_net_profit'), signed=True))}</td>"
+            f"<td>{_e(format_money(data.get('total_net_profit'), signed=True))}</td></tr>"
+        )
+
+    rows = [
+        _row("Hovedkandidat (topp 1)", backtest.get("top1", {})),
+        _row("Topp 5", backtest.get("top5", {})),
+    ]
+    for key, label in (
+        ("momentum", "Momentum"),
+        ("breakout", "Breakout"),
+        ("news", "Nyhetsdrevet"),
+    ):
+        rows.append(_row(label, backtest.get("by_category", {}).get(key, {})))
+    warnings = "".join(
+        f"<li>{_e(item)}</li>" for item in backtest.get("warnings", [])
+    )
+    target_summaries = backtest.get("target_summaries", {})
+    target_rows = "".join(
+        _row(f"Mål {label}", target_summaries[label])
+        for label in sorted(
+            target_summaries,
+            key=lambda value: float(str(value).rstrip("%") or 0),
+        )
+    )
+    stop_pct = (
+        backtest.get("settings", {})
+        .get("trade", {})
+        .get("stop_loss_pct", 0.02)
+    )
+    return (
+        '<section class="report backtest" id="historikk" aria-label="Historisk test">'
+        "<h2>Historisk test</h2>"
+        f"<p>Periode {_e(str(backtest.get('from_date') or DASH))}–"
+        f"{_e(str(backtest.get('to_date') or DASH))}. Primært mål +2 % og "
+        f"tapsgrense −{_e(format_pct(stop_pct, signed=False))}, netto etter kurtasje.</p>"
+        '<div class="table-wrap"><table class="mini-table"><thead><tr>'
+        "<th>Utvalg</th><th>Handler</th><th>+2 % treff</th><th>Stop</th>"
+        "<th>Gevinst</th><th>Snitt netto</th><th>Sum netto</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+        '<h3>Treff per gevinstmål</h3>'
+        '<div class="table-wrap"><table class="mini-table"><thead><tr>'
+        "<th>Mål</th><th>Handler</th><th>Treff</th><th>Stop</th>"
+        "<th>Gevinst</th><th>Snitt netto</th><th>Sum netto</th>"
+        f"</tr></thead><tbody>{target_rows}</tbody></table></div>"
+        f'<details class="reasons"><summary>Forbehold ved backtesten</summary><ul>{warnings}</ul></details>'
+        "</section>"
+    )
+
+
+def _history_section(history: Optional[list[dict]]) -> str:
+    if not history:
+        return ""
+
+    def _when(value: object) -> str:
+        if not isinstance(value, str):
+            return DASH
+        try:
+            return format_datetime(datetime.fromisoformat(value))
+        except ValueError:
+            return value
+
+    def _number(value: object) -> str:
+        return DASH if value is None else f"{float(value):.0f}"
+
+    rows = "".join(
+        "<tr>"
+        f"<td>{_e(_when(item.get('generated_at')))}</td>"
+        f"<td class=\"ticker\">{_e(item.get('ticker') or 'Stå over')}</td>"
+        f"<td>{_e(item.get('name') or item.get('reason') or DASH)}</td>"
+        f"<td class=\"num\">{_e(_number(item.get('score')))}</td>"
+        f"<td class=\"num\">{_e(_number(item.get('risk_score')))}</td>"
+        f"<td>{_e(', '.join(item.get('categories') or ()) or DASH)}</td>"
+        "</tr>"
+        for item in history
+    )
+    return (
+        '<section class="report history" aria-label="Tidligere morgenrapporter">'
+        "<h2>Tidligere morgenrapporter</h2>"
+        "<p>De nyeste permanent lagrede rapportene. Hver fil er tidsstemplet og "
+        "overskrives ikke.</p>"
+        '<div class="table-wrap"><table class="mini-table"><thead><tr>'
+        "<th>Rapport</th><th>Hovedkandidat</th><th>Selskap</th>"
+        "<th>Total</th><th>Risiko</th><th>Kategori</th>"
+        f"</tr></thead><tbody>{rows}</tbody></table></div>"
         "</section>"
     )
 
@@ -1334,8 +1891,13 @@ def render_dashboard(
     web_mode: bool = True,
     refresh_url: str = "/refresh",
     news: Optional[NewsFeed] = None,
+    report: Optional[PremarketReport] = None,
+    backtest: Optional[dict] = None,
+    history: Optional[list[dict]] = None,
 ) -> str:
     stocks = sort_stocks(result.matches, sort_by)
+    if report is None:
+        report = build_premarket_report(stocks, criteria, universe, news=news)
 
     def _news_for(stock: Stock) -> tuple[NewsItem, ...]:
         return news.for_stock(stock) if news is not None else ()
@@ -1349,8 +1911,9 @@ def render_dashboard(
         )
         for stock in stocks
     )
-    candidates = rank_candidates(stocks, limit=5)
-    candidates_html = _render_candidates(candidates, criteria, news)
+    report_html = _premarket_section(report, criteria, news)
+    backtest_html = _backtest_section(backtest)
+    history_html = _history_section(history)
     news_html = _news_section(news, stocks)
     at_high_count = result.at_high_count
     growth_hidden = result.excluded.get("euronext growth", 0)
@@ -1459,20 +2022,21 @@ def render_dashboard(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <title>Tollbugata Profits · Oslo Børs ukescreen</title>
+  <title>Tollbugata Profits · Oslo Børs pre-market</title>
   <style>{_CSS}</style>
 </head>
 <body>
   <div class="shell">
     <header class="hero">
       <div>
-        <p class="eyebrow">Oslo Børs · ukescreen</p>
+        <p class="eyebrow">Oslo Børs · pre-market daytrading</p>
         <h1>Tollbugata Profits</h1>
-        <p class="lede">Aksjer med positiv trend siste uke. Aksjer på/ved all-time high er tydelig merket med <strong>ATH</strong>.</p>
+        <p class="lede">Én hovedkandidat, 5–10 alternativer og en manuell plan med kurtasje, gevinstmål og tapsgrense. Rapporten lages før børsåpning. Ingen automatisk handel.</p>
       </div>
       <div class="stamp">
         <span>Data hentet</span>
         <strong>{_e(format_datetime(universe.fetched_at))}</strong>
+        <span class="source">Rapport: {_e(format_datetime(report.generated_at))}</span>
         <span class="source">Kilde: TradingView ({_e(source_label)})</span>
       </div>
     </header>
@@ -1506,9 +2070,13 @@ def render_dashboard(
       {''.join(chips)}
     </div>
 
-    {candidates_html}
+    {report_html}
 
     {news_html}
+
+    {backtest_html}
+
+    {history_html}
 
     <section class="panel">
       <form id="filters" class="filters" method="get"{action}>
@@ -1559,8 +2127,8 @@ def render_dashboard(
         {f'<strong>{growth_hidden}</strong> Euronext Growth-aksjer er skjult fordi de normalt ikke kan holdes på ASK. ' if criteria.exclude_growth and growth_hidden else ''}
         Data fra TradingView-scanneren (uoffisiell, uten API-nøkkel). Tallene kan være forsinket
         og inneholde feil. Børsmeldinger fra Oslo Børs NewsWeb kan også være forsinket.
-        Topp 5 er en teknisk rangering, ikke et kjøpssignal.
-        Dette er ikke investeringsråd.
+        Score er en relativ poengsum, ikke en sannsynlighet. Rapporten er ikke et kjøpssignal,
+        utfører ingen handler og er ikke investeringsråd.
       </p>
       <p>Kriterier: {_e(describe_criteria(criteria))}</p>
     </div>

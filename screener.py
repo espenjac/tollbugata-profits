@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Tollbugata Profits – kommandolinje for Oslo Børs-ukescreen.
+"""Tollbugata Profits – pre-market-rapport for Oslo Børs.
 
 Eksempler:
     python screener.py
-    python screener.py --min-week 2 --top 0
+    python screener.py --config min-config.json --capital 5000
     python screener.py --html rapport.html
     python screener.py --json treff.json --quiet
 """
@@ -19,12 +19,26 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from oslo_screener.cli import add_common_arguments, criteria_from_args
+from oslo_screener.cli import (
+    add_common_arguments,
+    criteria_from_args,
+    settings_from_args,
+)
 from oslo_screener.data import DataSourceError, fetch_universe
 from oslo_screener.logic import is_at_high, screen, sort_stocks
 from oslo_screener.news import fetch_news
+from oslo_screener.premarket import (
+    build_premarket_report,
+    load_latest_backtest,
+    load_report_history,
+    save_report,
+)
 from oslo_screener.render import render_dashboard, render_terminal
-from oslo_screener.serialize import result_to_dict, stock_to_dict
+from oslo_screener.serialize import (
+    premarket_to_dict,
+    result_to_dict,
+    stock_to_dict,
+)
 
 CSV_FIELDS = [
     "ticker",
@@ -62,6 +76,11 @@ CSV_FIELDS = [
     "latest_news_time",
     "latest_news_title",
     "latest_news_url",
+    "total_score",
+    "opportunity_score",
+    "risk_score",
+    "categories",
+    "recommendable",
 ]
 
 
@@ -71,10 +90,13 @@ def _write_text(path: str, text: str) -> None:
     target.write_text(text, encoding="utf-8")
 
 
-def _csv_text(stocks, criteria, news=None) -> str:
+def _csv_text(stocks, criteria, news=None, report=None) -> str:
     buffer = io.StringIO()
     writer = csv.DictWriter(buffer, fieldnames=CSV_FIELDS, extrasaction="ignore", lineterminator="\n")
     writer.writeheader()
+    planned_by_ticker = {
+        item.candidate.stock.ticker: item for item in (report.ranked if report else ())
+    }
     for stock in stocks:
         items = news.for_stock(stock) if news is not None else ()
         data = stock_to_dict(
@@ -87,12 +109,20 @@ def _csv_text(stocks, criteria, news=None) -> str:
         data["latest_news_time"] = latest.get("published_at") if latest else None
         data["latest_news_title"] = latest.get("title") if latest else None
         data["latest_news_url"] = latest.get("url") if latest else None
+        planned = planned_by_ticker.get(stock.ticker)
+        if planned is not None:
+            data["total_score"] = round(planned.candidate.score, 1)
+            data["opportunity_score"] = round(planned.candidate.opportunity_score, 1)
+            data["risk_score"] = round(planned.candidate.risk_score, 1)
+            data["categories"] = ",".join(planned.category_labels)
+            data["recommendable"] = planned.recommendable
         writer.writerow(data)
     return buffer.getvalue()
 
 
-def run_once(args: argparse.Namespace, force: bool = False) -> int:
+def run_once(args: argparse.Namespace, force: bool = False, save: bool = True) -> int:
     criteria = criteria_from_args(args)
+    settings = settings_from_args(args)
     universe = fetch_universe(
         cache_ttl=args.cache_ttl,
         force=force,
@@ -103,6 +133,15 @@ def run_once(args: argparse.Namespace, force: bool = False) -> int:
     news = None
     if not args.no_news:
         news = fetch_news(timeout=args.timeout, force=force)
+
+    report = build_premarket_report(
+        result.matches,
+        criteria,
+        universe,
+        news=news,
+        settings=settings,
+    )
+    premarket_payload = premarket_to_dict(report, news=news)
 
     json_to_stdout = args.json == "-"
     csv_to_stdout = args.csv == "-"
@@ -115,6 +154,8 @@ def run_once(args: argparse.Namespace, force: bool = False) -> int:
                 criteria,
                 sort_by=args.sort,
                 news=news,
+                premarket=premarket_payload,
+                settings=settings,
             ),
             ensure_ascii=False,
             indent=2,
@@ -125,7 +166,7 @@ def run_once(args: argparse.Namespace, force: bool = False) -> int:
             _write_text(args.json, payload + "\n")
 
     if args.csv is not None:
-        payload = _csv_text(stocks, criteria, news)
+        payload = _csv_text(stocks, criteria, news, report=report)
         if csv_to_stdout:
             sys.stdout.write(payload)
         else:
@@ -139,6 +180,9 @@ def run_once(args: argparse.Namespace, force: bool = False) -> int:
             sort_by=args.sort,
             web_mode=False,
             news=news,
+            report=report,
+            backtest=load_latest_backtest(),
+            history=load_report_history(),
         )
         _write_text(args.html, page)
 
@@ -152,8 +196,13 @@ def run_once(args: argparse.Namespace, force: bool = False) -> int:
                 limit=args.top,
                 color=False if args.no_color else None,
                 news=news,
+                report=report,
             )
         )
+
+    saved_path = None
+    if save and not args.no_save_report:
+        saved_path = save_report(report, news=news)
 
     if args.html is not None:
         print(f"HTML-rapport skrevet til {args.html}", file=sys.stderr)
@@ -161,6 +210,8 @@ def run_once(args: argparse.Namespace, force: bool = False) -> int:
         print(f"JSON skrevet til {args.json}", file=sys.stderr)
     if args.csv is not None and not csv_to_stdout:
         print(f"CSV skrevet til {args.csv}", file=sys.stderr)
+    if saved_path is not None:
+        print(f"Morgenrapport lagret: {saved_path}", file=sys.stderr)
 
     return 0
 
@@ -169,8 +220,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="screener.py",
         description=(
-            "Går gjennom aksjene på Oslo Børs og lister opp de som har positiv "
-            "trend siste uke, men som ikke er på all-time high."
+            "Bygger en pre-market-rapport for Oslo Børs med hovedkandidat, "
+            "alternativer, score, risiko og manuell handelsplan."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
@@ -235,12 +286,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         while True:
             if not first and not args.quiet and sys.stdout.isatty():
                 print("\033[2J\033[H", end="")
-            code = run_once(args, force=args.refresh or not first)
+            code = run_once(args, force=args.refresh or not first, save=first)
             first = False
             if args.loop <= 0:
                 return code
             time.sleep(args.loop)
-    except DataSourceError as exc:
+    except (DataSourceError, ValueError) as exc:
         print(f"Feil: {exc}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:

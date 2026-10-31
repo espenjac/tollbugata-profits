@@ -1,4 +1,4 @@
-"""Tollbugata Profits – ukescreen for Oslo Børs."""
+"""Tollbugata Profits – pre-market daytrading for Oslo Børs."""
 
 from .data import DataSourceError, Universe, fetch_universe, parse_payload
 from .logic import Criteria, ScreenResult, screen, sort_stocks

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 
+from .config import Settings, load_settings, validate_settings
 from .logic import SORT_FIELDS, Criteria
 
 
@@ -99,6 +101,78 @@ def add_common_arguments(parser: argparse.ArgumentParser) -> None:
         help="ikke hent børsmeldinger fra Oslo Børs NewsWeb",
     )
 
+    premarket = parser.add_argument_group("pre-market og risiko")
+    premarket.add_argument(
+        "--config",
+        metavar="FIL",
+        help="JSON-fil med vekter, kapital, kurtasje og rapportterskler",
+    )
+    premarket.add_argument(
+        "--capital",
+        type=float,
+        metavar="NOK",
+        help="startkapital i kroner (standard: 5000)",
+    )
+    premarket.add_argument(
+        "--buy-fee",
+        type=float,
+        metavar="NOK",
+        help="kurtasje ved kjøp (standard: 29)",
+    )
+    premarket.add_argument(
+        "--sell-fee",
+        type=float,
+        metavar="NOK",
+        help="kurtasje ved salg (standard: 29)",
+    )
+    premarket.add_argument(
+        "--target",
+        type=float,
+        metavar="PCT",
+        help="første gevinstmål i prosent (standard: 2)",
+    )
+    premarket.add_argument(
+        "--stop-loss",
+        type=float,
+        metavar="PCT",
+        help="tapsgrense i prosent (standard: 2)",
+    )
+    premarket.add_argument(
+        "--slippage",
+        type=float,
+        metavar="PCT",
+        help="antatt slippage/spread i prosent (standard: 0)",
+    )
+    premarket.add_argument(
+        "--min-score",
+        type=float,
+        metavar="POENG",
+        help="minste samlede score for hovedanbefaling (standard: 58)",
+    )
+    premarket.add_argument(
+        "--max-risk",
+        type=float,
+        metavar="POENG",
+        help="høyeste risikoscore for hovedanbefaling (standard: 58)",
+    )
+    premarket.add_argument(
+        "--min-opportunity",
+        type=float,
+        metavar="POENG",
+        help="minste mulighetsscore for hovedanbefaling (standard: 55)",
+    )
+    premarket.add_argument(
+        "--max-alternatives",
+        type=int,
+        metavar="ANTALL",
+        help="maks antall alternativer i rapporten (standard: 10)",
+    )
+    premarket.add_argument(
+        "--no-save-report",
+        action="store_true",
+        help="ikke lagre morgenrapporten i reports/premarket",
+    )
+
 
 def criteria_from_args(args: argparse.Namespace) -> Criteria:
     types = ("stock",) if args.only_stocks else ("stock", "dr")
@@ -114,3 +188,51 @@ def criteria_from_args(args: argparse.Namespace) -> Criteria:
         include_at_high=not args.exclude_ath,
         exclude_growth=not args.include_growth,
     )
+
+
+def settings_from_args(args: argparse.Namespace) -> Settings:
+    """Les konfigurasjon og la enkle CLI-flagg overstyre standardverdiene."""
+    base = load_settings(getattr(args, "config", None))
+    trade = base.trade
+    report = base.report
+    overrides = {
+        "capital": getattr(args, "capital", None),
+        "buy_fee": getattr(args, "buy_fee", None),
+        "sell_fee": getattr(args, "sell_fee", None),
+        "slippage_pct": (
+            getattr(args, "slippage", None) / 100.0
+            if getattr(args, "slippage", None) is not None
+            else None
+        ),
+        "target_pct": (
+            getattr(args, "target", None) / 100.0
+            if getattr(args, "target", None) is not None
+            else None
+        ),
+        "stop_loss_pct": (
+            getattr(args, "stop_loss", None) / 100.0
+            if getattr(args, "stop_loss", None) is not None
+            else None
+        ),
+    }
+    trade = replace(
+        trade,
+        **{name: value for name, value in overrides.items() if value is not None},
+    )
+    report_overrides = {
+        "min_total_score": getattr(args, "min_score", None),
+        "max_risk": getattr(args, "max_risk", None),
+        "min_opportunity": getattr(args, "min_opportunity", None),
+        "max_alternatives": getattr(args, "max_alternatives", None),
+    }
+    report = replace(
+        report,
+        **{
+            name: value
+            for name, value in report_overrides.items()
+            if value is not None
+        },
+    )
+    result = replace(base, trade=trade, report=report)
+    validate_settings(result)
+    return result

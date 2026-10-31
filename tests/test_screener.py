@@ -1180,14 +1180,21 @@ class RenderTests(unittest.TestCase):
     def test_dashboard_has_top_candidates(self) -> None:
         result = screen([make_stock()], Criteria())
         page = render_dashboard(result, self._universe(), Criteria(), web_mode=True)
-        self.assertIn("Topp 5 kandidater", page)
+        self.assertIn("Kandidatene er et teknisk utgangspunkt", page)
         self.assertIn("pick-score", page)
         self.assertIn("Ikke et kjøpssignal", page)
 
     def test_terminal_has_top_candidates(self) -> None:
-        result = screen([make_stock()], Criteria())
+        result = screen(
+            [
+                make_stock(),
+                make_stock(ticker="DNB", name="DNB Bank ASA"),
+            ],
+            Criteria(),
+        )
         text = render_terminal(result, self._universe(), Criteria(), color=False)
-        self.assertIn("Topp 5 kandidater", text)
+        self.assertIn("Alternativer", text)
+        self.assertIn("Netto scenarier opp", text)
 
     def test_dashboard_links_to_nordnet_chart(self) -> None:
         result = screen([make_stock()], Criteria())

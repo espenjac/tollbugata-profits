@@ -36,6 +36,16 @@ def format_number(value: Optional[float], digits: int = 0) -> str:
     return rounded.replace(",", " ").replace(".", ",")
 
 
+def format_money(value: Optional[float], digits: int = 0, signed: bool = False) -> str:
+    """Kroner med norsk tusenskille, f.eks. «4 913 kr»."""
+    if value is None:
+        return DASH
+    text = format_number(value, digits)
+    if signed and value > 0:
+        text = "+" + text
+    return f"{text} kr"
+
+
 def format_market_cap(value: Optional[float]) -> str:
     """Markedsverdi i kompakt norsk form, f.eks. «1,1 mrd»."""
     if value is None:

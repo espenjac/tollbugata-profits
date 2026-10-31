@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tollbugata Profits – lokal webapp for Oslo Børs-ukescreen.
+"""Tollbugata Profits – lokal webapp for Oslo Børs pre-market.
 
 Kjør:
     python app.py
@@ -19,12 +19,23 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Optional
 from urllib.parse import parse_qs, urlencode, urlparse
 
-from oslo_screener.cli import add_common_arguments, criteria_from_args
+from oslo_screener.cli import (
+    add_common_arguments,
+    criteria_from_args,
+    settings_from_args,
+)
+from oslo_screener.config import Settings
 from oslo_screener.data import DataSourceError, fetch_universe
 from oslo_screener.logic import Criteria, screen
 from oslo_screener.news import fetch_news
+from oslo_screener.premarket import (
+    build_premarket_report,
+    load_latest_backtest,
+    load_report_history,
+    save_daily_report,
+)
 from oslo_screener.render import render_dashboard
-from oslo_screener.serialize import result_to_dict
+from oslo_screener.serialize import premarket_to_dict, result_to_dict
 
 
 def _float_param(
@@ -131,6 +142,15 @@ class ScreenerHandler(BaseHTTPRequestHandler):
         refresh_url = "/refresh"
         if query:
             refresh_url += "?" + urlencode(query, doseq=True)
+        report = build_premarket_report(
+            result.matches,
+            criteria,
+            universe,
+            news=news,
+            settings=self.app.settings,
+        )
+        history = load_report_history()
+        save_daily_report(report, news=news)
         page = render_dashboard(
             result,
             universe,
@@ -139,6 +159,9 @@ class ScreenerHandler(BaseHTTPRequestHandler):
             web_mode=True,
             refresh_url=refresh_url,
             news=news,
+            report=report,
+            backtest=load_latest_backtest(),
+            history=history,
         )
         self._send(200, "text/html; charset=utf-8", page.encode("utf-8"))
 
@@ -154,12 +177,21 @@ class ScreenerHandler(BaseHTTPRequestHandler):
             if self.app.include_news
             else None
         )
+        report = build_premarket_report(
+            result.matches,
+            criteria,
+            universe,
+            news=news,
+            settings=self.app.settings,
+        )
         payload = result_to_dict(
             result,
             universe,
             criteria,
             sort_by=self.app.sort_by,
             news=news,
+            premarket=premarket_to_dict(report, news=news),
+            settings=self.app.settings,
         )
         body = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
         self._send(200, "application/json; charset=utf-8", body)
@@ -229,19 +261,21 @@ class ScreenerHTTPServer(ThreadingHTTPServer):
         http_timeout: float,
         sort_by: str,
         include_news: bool = True,
+        settings: Optional[Settings] = None,
     ) -> None:
         self.defaults = defaults
         self.cache_ttl = cache_ttl
         self.http_timeout = http_timeout
         self.sort_by = sort_by
         self.include_news = include_news
+        self.settings = settings or Settings()
         super().__init__(server_address, ScreenerHandler)
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="app.py",
-        description="Lokal webapp som viser Oslo Børs-aksjer med positiv uketrend, men under ATH.",
+        description="Lokal webapp med pre-market-rapport for Oslo Børs.",
     )
     add_common_arguments(parser)
     parser.add_argument("--host", default="127.0.0.1", help="lytteadresse (standard: 127.0.0.1)")
@@ -253,7 +287,12 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    defaults = criteria_from_args(args)
+    try:
+        defaults = criteria_from_args(args)
+        settings = settings_from_args(args)
+    except ValueError as exc:
+        print(f"Feil i konfigurasjonen: {exc}", file=sys.stderr)
+        return 1
 
     try:
         server = ScreenerHTTPServer(
@@ -263,6 +302,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             http_timeout=args.timeout,
             sort_by=args.sort,
             include_news=not args.no_news,
+            settings=settings,
         )
     except OSError as exc:
         print(f"Kunne ikke starte på {args.host}:{args.port}: {exc}", file=sys.stderr)
