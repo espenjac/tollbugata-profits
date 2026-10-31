@@ -1,0 +1,2 @@
+# Ingen tredjepartsavhengigheter – appen bruker bare Python-standardbiblioteket.
+# Filen ligger her fordi mange forventer en requirements.txt.

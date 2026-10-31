@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.venv/
+.cache/
+oslo_screen.html
+rapport.html
+reports/
