@@ -1,0 +1,5 @@
+# `supabase link --project-ref <ref>` oppdaterer project_id.
+project_id = "tollbugata-profits"
+
+[functions.market-snapshot]
+verify_jwt = true

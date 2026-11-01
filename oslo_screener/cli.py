@@ -141,7 +141,7 @@ def add_common_arguments(parser: argparse.ArgumentParser) -> None:
         "--slippage",
         type=float,
         metavar="PCT",
-        help="antatt slippage/spread i prosent (standard: 0)",
+        help="antatt slippage ved kjøp og salg i prosent (standard: 0)",
     )
     premarket.add_argument(
         "--min-score",
@@ -165,7 +165,10 @@ def add_common_arguments(parser: argparse.ArgumentParser) -> None:
         "--max-alternatives",
         type=int,
         metavar="ANTALL",
-        help="maks antall alternativer i rapporten (standard: 10)",
+        help=(
+            "maks antall anbefalte alternativer og blokkerte kandidater "
+            "i rapporten (standard: 10)"
+        ),
     )
     premarket.add_argument(
         "--no-save-report",

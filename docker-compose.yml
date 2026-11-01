@@ -1,0 +1,18 @@
+services:
+  tollbugata:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      TP_PASSWORD: ${TP_PASSWORD:?Sett TP_PASSWORD i .env eller miljøet}
+      TP_SECRET: ${TP_SECRET:?Sett TP_SECRET i .env eller miljøet}
+      TP_JOURNAL: /app/storage/journal.json
+      TP_REPORTS_ROOT: /app/storage/reports
+      # Sett til 1 når appen ligger bak HTTPS.
+      TP_SECURE_COOKIES: ${TP_SECURE_COOKIES:-0}
+    volumes:
+      - tollbugata-storage:/app/storage
+
+volumes:
+  tollbugata-storage:

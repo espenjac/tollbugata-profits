@@ -8,6 +8,7 @@ import shutil
 import statistics
 from datetime import date, datetime
 from typing import Optional
+from urllib.parse import parse_qs, urlencode, urlparse
 
 from .data import Universe
 from .formatting import (
@@ -21,6 +22,7 @@ from .formatting import (
     format_pct,
     format_price,
 )
+from .journal import Journal, summarize_journal
 from .logic import (
     EXCLUSION_LABELS,
     Criteria,
@@ -187,22 +189,23 @@ def _terminal_premarket(report: PremarketReport, color: bool) -> list[str]:
             lines.append(_paint(f"  Risiko: {' · '.join(candidate.warnings)}", _YELLOW, color))
         lines.append(
             _paint(
-                "  Følg med: bekreft kurs over siste sluttkurs, volum og spread etter åpning. "
+                "  Følg med: bekreft kurs over siste sluttkurs og unormalt høyt volum etter åpning. "
                 "Ingen automatisk handel.",
                 _DIM,
                 color,
             )
         )
-    if report.alternatives:
+    def append_candidates(
+        title: str,
+        items: tuple[PlannedCandidate, ...],
+        *,
+        blocked: bool,
+    ) -> None:
+        if not items:
+            return
         lines.append("")
-        lines.append(
-            _paint(
-                "Alternativer (5–10, ikke nødvendigvis anbefalt):",
-                _BOLD,
-                color,
-            )
-        )
-        for index, item in enumerate(report.alternatives, 1):
+        lines.append(_paint(title, _BOLD, color))
+        for index, item in enumerate(items, 1):
             candidate = item.candidate
             categories = ", ".join(item.category_labels) or "ingen kategori"
             lines.append(
@@ -210,7 +213,7 @@ def _terminal_premarket(report: PremarketReport, color: bool) -> list[str]:
                 f"{candidate.score:3.0f} total · risiko {candidate.risk_score:3.0f} · "
                 f"{_fit(candidate.stock.name, 22)} · {categories}"
             )
-            if item.block_reasons:
+            if blocked and item.block_reasons:
                 lines.append(
                     _paint(
                         f"     Ikke anbefalt: {'; '.join(item.block_reasons)}",
@@ -218,10 +221,28 @@ def _terminal_premarket(report: PremarketReport, color: bool) -> list[str]:
                         color,
                     )
                 )
-            else:
+            elif not blocked:
                 lines.append(
                     _paint("     Kan vurderes som alternativ.", _DIM, color)
                 )
+
+    if report.main is None:
+        append_candidates(
+            f"Mulige alternativer – ikke anbefalt som hovedhandel ({len(report.blocked)}):",
+            report.blocked,
+            blocked=True,
+        )
+    else:
+        append_candidates(
+            f"Alternativer – anbefalt ({len(report.alternatives)}):",
+            report.alternatives,
+            blocked=False,
+        )
+        append_candidates(
+            f"Ikke anbefalte kandidater – blokkert ({len(report.blocked)}):",
+            report.blocked,
+            blocked=True,
+        )
     if report.warnings:
         for warning in report.warnings:
             lines.append(_paint(f"Advarsel: {warning}", _YELLOW, color))
@@ -471,7 +492,7 @@ _CSS = """
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
   min-height: 100vh;
@@ -519,6 +540,29 @@ h1 {
 }
 .stamp strong { display: block; margin: 3px 0 5px; color: var(--text); font-size: 14px; font-variant-numeric: tabular-nums; }
 .stamp .source { color: var(--muted-2); }
+.tabs { display: flex; flex-wrap: wrap; gap: 5px; width: fit-content; margin: 0 0 22px; padding: 5px; border: 1px solid var(--border-soft); border-radius: 12px; background: rgba(8, 13, 25, .3); }
+.tab { display: inline-flex; align-items: center; height: 34px; padding: 0 14px; border: 1px solid transparent; border-radius: 8px; color: var(--muted); font-size: 13px; font-weight: 700; text-decoration: none; }
+.tab:hover { color: var(--text); background: rgba(94, 234, 212, .08); }
+.tab.active { border-color: rgba(94, 234, 212, .28); background: rgba(94, 234, 212, .14); color: #9ff5e7; }
+.install-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 0 18px;
+  padding: 12px 16px;
+  border: 1px solid rgba(94, 234, 212, .30);
+  border-radius: 12px;
+  background: rgba(94, 234, 212, .08);
+  font-size: 13px;
+}
+.install-banner[hidden] { display: none; }
+.install-banner strong { display: block; color: var(--text); }
+.install-banner span { color: var(--muted); }
+.install-banner .btn { flex: 0 0 auto; width: auto; }
+.logout-form { margin: 0; }
+.login-error { margin: 0 0 12px; padding: 10px 12px; border: 1px solid rgba(251, 113, 133, .35); border-radius: 9px; background: rgba(251, 113, 133, .10); color: #fecdd3; font-size: 13px; }
+.login-note { margin: 14px 0 0; color: var(--muted-2); font-size: 12px; line-height: 1.55; }
 .warning {
   margin: 0 0 20px;
   padding: 13px 16px;
@@ -604,6 +648,30 @@ h1 {
   background: rgba(17, 27, 49, .55);
 }
 .pick:hover { border-color: var(--border); background: rgba(22, 35, 61, .72); }
+.pick-expandable { display: block; padding: 0; }
+.pick-details { display: block; }
+.pick-summary {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.pick-summary::-webkit-details-marker { display: none; }
+.pick-summary::marker { content: ""; }
+.pick-summary:focus-visible { outline: 2px solid rgba(94, 234, 212, .55); outline-offset: -2px; }
+.pick-details[open] .pick-summary { border-bottom: 1px solid var(--border-soft); border-radius: 12px 12px 0 0; }
+.pick-detail-body { padding: 14px; }
+.pick-expand-hint { display: block; margin-top: 4px; color: var(--accent-2); font-size: 9px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
+.pick-expand-hint .when-open { display: none; }
+.pick-details[open] .pick-expand-hint .when-closed { display: none; }
+.pick-details[open] .pick-expand-hint .when-open { display: inline; }
+.candidate-detail { border-color: var(--border); background: rgba(8, 13, 25, .32); }
+.candidate-blocked { margin: 0 0 14px; padding: 10px 12px; border: 1px solid rgba(251, 191, 36, .36); border-radius: 10px; background: rgba(251, 191, 36, .08); }
+.candidate-blocked strong { display: block; margin-bottom: 4px; color: #ffd77a; font-size: 12px; }
 .pick-rank {
   display: grid;
   place-items: center;
@@ -845,6 +913,38 @@ h1 {
 .report-news-title a { color: #bfe9ff; text-decoration: none; }
 .report-news-title a:hover { color: var(--accent); text-decoration: underline; }
 .report-note { margin: 8px 0 0; color: var(--muted-2); font-size: 11px; }
+.journal-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin: 14px 0; }
+.journal-stats > div { padding: 10px 12px; border: 1px solid var(--border-soft); border-radius: 10px; background: rgba(8, 13, 25, .3); }
+.journal-stats span { display: block; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.journal-stats strong { display: block; margin: 3px 0 1px; font-size: 20px; font-variant-numeric: tabular-nums; }
+.journal-stats small { color: var(--muted-2); font-size: 10.5px; }
+.journal-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 14px; margin-top: 14px; }
+.journal-box { padding: 14px; border: 1px solid var(--border-soft); border-radius: 12px; background: rgba(8, 13, 25, .24); }
+.journal-box h3 { margin-top: 0; }
+.journal-trades { max-height: 460px; overflow: auto; }
+.journal-edited { display: inline-block; margin-top: 2px; color: var(--amber); font-size: 9.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.quick-sell { margin-top: 8px; border: 1px solid var(--border-soft); border-radius: 10px; background: rgba(8, 13, 25, .2); }
+.quick-sell summary { padding: 10px 12px; cursor: pointer; color: #bfe9ff; font-size: 12.5px; font-weight: 700; }
+.quick-sell[open] summary { border-bottom: 1px solid var(--border-soft); }
+.quick-sell .journal-form { padding: 12px; }
+.quick-sell .journal-note { padding: 0 12px 12px; }
+.edit-trade { margin-top: 14px; border-color: rgba(56, 189, 248, .35); }
+.btn.small { height: 28px; padding: 0 9px; font-size: 11px; border-radius: 7px; }
+.journal-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: end; }
+.journal-form .wide { grid-column: 1 / -1; }
+.journal-form label { display: flex; flex-direction: column; gap: 5px; min-width: 0; color: var(--muted); font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.journal-form input, .journal-form select { width: 100%; height: 38px; padding: 0 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--bg-2); color: var(--text); font: inherit; font-size: 14px; font-variant-numeric: tabular-nums; }
+.journal-form input:focus, .journal-form select:focus { outline: 2px solid rgba(94, 234, 212, .5); outline-offset: 1px; }
+.journal-form .btn { margin-top: 2px; }
+.journal-note { margin: 10px 0 0; color: var(--muted-2); font-size: 11px; }
+.journal-notice { margin: 0 0 12px; padding: 10px 12px; border: 1px solid rgba(52, 211, 153, .35); border-radius: 10px; background: rgba(52, 211, 153, .08); color: #bbf7d0; font-size: 12.5px; }
+.journal-hint { margin: 10px 0 0; color: var(--muted); font-size: 12.5px; }
+.journal-hint.warning-text { color: #ffd77a; }
+.journal .mini-table th { cursor: default; }
+.mini-table td.journal-note { max-width: 280px; overflow-wrap: anywhere; }
+.trade-side { display: inline-block; padding: 1px 6px; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.trade-side.buy { border: 1px solid rgba(52, 211, 153, .4); color: var(--green); }
+.trade-side.sell { border: 1px solid rgba(251, 113, 133, .4); color: var(--red); }
 .no-trade { padding: 22px; border: 1px solid rgba(251, 191, 36, .40); border-radius: 12px; background: rgba(251, 191, 36, .08); }
 .no-trade h3 { margin: 0 0 6px; color: #ffe4a3; font-size: 18px; }
 .no-trade p { margin: 0; color: #ffe4a3; font-size: 13px; }
@@ -1014,30 +1114,154 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: now
   font-size: 12px;
 }
 .foot p { margin: 0; max-width: 780px; }
+@media (max-width: 900px) {
+  .journal-grid, .journal-form { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 760px) {
-  .shell { width: calc(100% - 24px); padding-top: 24px; }
+  .shell {
+    width: calc(100% - 24px);
+    padding-top: calc(24px + env(safe-area-inset-top));
+    padding-bottom: calc(44px + env(safe-area-inset-bottom));
+  }
   .hero { align-items: flex-start; flex-direction: column; }
   .stamp { text-align: left; }
+  .tabs { width: 100%; }
+  .tab { flex: 1 1 0; justify-content: center; height: 40px; }
+  .install-banner { flex-direction: column; align-items: stretch; }
+  .install-banner .btn { width: 100%; }
   .stats { grid-template-columns: 1fr; }
   .filters { align-items: stretch; }
   .field, .field.search { flex: 1 1 100%; }
-  .btn { width: 100%; }
+  .btn { width: 100%; min-height: 42px; }
+  .check { min-height: 42px; }
+  .field input[type="number"], .field input[type="search"],
+  .journal-form input, .journal-form select { font-size: 16px; }
   thead th, tbody td { padding: 10px 11px; }
   .sector { display: none; }
   .picks { padding: 16px; }
   .picks-head { flex-direction: column; }
   .pick { grid-template-columns: 26px minmax(0, 1fr); }
+  .pick-summary { grid-template-columns: 26px minmax(0, 1fr); min-height: 44px; }
   .pick-score { grid-column: 2; font-size: 20px; text-align: left; }
+  .pick-detail-body { padding: 12px; }
   .report { padding: 16px; }
   .report-head, .main-pick-head { flex-direction: column; }
   .report-stamp { text-align: left; }
   .report-cols { grid-template-columns: 1fr; gap: 4px; }
+  .report-grid { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
   .score-row { width: 100%; }
   .news { padding: 16px; }
   .news-head { flex-direction: column; }
   .news-list { grid-template-columns: 1fr; }
 }
 """
+
+_PWA_HEAD = """
+  <meta name="theme-color" content="#080d19">
+  <meta name="application-name" content="Tollbugata Profits">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Tollbugata">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+"""
+
+_PWA_SCRIPT = """
+(function () {
+  "use strict";
+  var local = location.hostname === "localhost" ||
+    location.hostname === "127.0.0.1" ||
+    location.hostname === "[::1]";
+  if ("serviceWorker" in navigator && (location.protocol === "https:" || local)) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("/sw.js").catch(function () {});
+    });
+  }
+
+  var banner = document.getElementById("install-banner");
+  var button = document.getElementById("install-app");
+  if (!banner || !button) return;
+
+  function hide() {
+    banner.hidden = true;
+    button.hidden = true;
+  }
+
+  if (window.matchMedia &&
+      window.matchMedia("(display-mode: standalone)").matches) {
+    hide();
+    return;
+  }
+
+  var promptEvent = null;
+  window.addEventListener("beforeinstallprompt", function (event) {
+    event.preventDefault();
+    promptEvent = event;
+    banner.hidden = false;
+    button.hidden = false;
+  });
+
+  button.addEventListener("click", function () {
+    if (!promptEvent) return;
+    var current = promptEvent;
+    promptEvent = null;
+    current.prompt();
+    hide();
+  });
+
+  window.addEventListener("appinstalled", hide);
+})();
+"""
+
+
+def _install_banner() -> str:
+    return """
+    <div class="install-banner" id="install-banner" hidden>
+      <div>
+        <strong>Installer på telefonen</strong>
+        <span>Samme app og samme logikk som på desktop.</span>
+      </div>
+      <button class="btn" id="install-app" type="button" hidden>Installer app</button>
+    </div>
+    """
+
+
+def render_offline_page() -> str:
+    """Enkel side som tjenestearbeideren viser når serveren er utilgjengelig."""
+    return f"""<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Offline · Tollbugata Profits</title>
+  {_PWA_HEAD}
+  <style>{_CSS}</style>
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Tollbugata Profits · offline</p>
+        <h1>Ingen forbindelse</h1>
+        <p class="lede">Telefonen når ikke serveren som kjører appen. Kontroller
+        nettforbindelsen og at serveren er startet.</p>
+      </div>
+    </header>
+    <section class="report">
+      <p>Appen lagrer ikke markedsdata eller dagbok på telefonen. Det er med
+      vilje: alle tall og all logikk skal komme fra den samme serveren som på
+      desktop.</p>
+      <p><a class="btn" href="/">Prøv igjen</a></p>
+    </section>
+  </div>
+</body>
+</html>
+"""
+
 
 _JS = """
 (function () {
@@ -1318,6 +1542,7 @@ def _candidate_card(
     news_items: tuple[NewsItem, ...] = (),
     news_feed: Optional[NewsFeed] = None,
     planned: Optional[PlannedCandidate] = None,
+    detail_html: Optional[str] = None,
 ) -> str:
     stock = candidate.stock
     badge = (
@@ -1375,8 +1600,15 @@ def _candidate_card(
             f'stopp {_e(format_price(trade.stop_price))} kr</p>'
             f"{blocked}"
         )
-    return (
-        f'<li class="pick">'
+    expand_hint = ""
+    if detail_html is not None:
+        expand_hint = (
+            '<span class="pick-expand-hint">'
+            '<span class="when-closed">Vis detaljer</span>'
+            '<span class="when-open">Skjul detaljer</span>'
+            "</span>"
+        )
+    card_inner = (
         f'<span class="pick-rank">{rank}</span>'
         f'<div class="pick-body">'
         f'<div class="pick-title">'
@@ -1395,8 +1627,17 @@ def _candidate_card(
         f'<span class="pick-score" title="Samlet relativ poengsum 0–100">'
         f'{candidate.score:.0f}<small>total</small>'
         f'<span class="score-sub">M {candidate.opportunity_score:.0f} · '
-        f'R {candidate.risk_score:.0f}</span></span>'
-        f"</li>"
+        f'R {candidate.risk_score:.0f}</span>{expand_hint}</span>'
+    )
+    if detail_html is None:
+        return f'<li class="pick">{card_inner}</li>'
+    return (
+        '<li class="pick pick-expandable">'
+        '<details class="pick-details">'
+        f'<summary class="pick-summary" title="Vis detaljer for {_e(stock.ticker)}">'
+        f"{card_inner}</summary>"
+        f'<div class="pick-detail-body">{detail_html}</div>'
+        "</details></li>"
     )
 
 
@@ -1410,8 +1651,8 @@ def _render_candidates(
         "<div>"
         "<h2>Topp 5 kandidater</h2>"
         "<p>Teknisk rangering av dagens treff basert på momentum, trend, "
-        "likviditet, volatilitet og RSI. Ikke et kjøpssignal – bekreft volum, "
-        "spread og retning etter børsåpning.</p>"
+        "jevnhet, likviditet, volatilitet og RSI. Ikke et kjøpssignal – bekreft volum, "
+        "likviditet og retning etter børsåpning.</p>"
         "</div>"
         '<span class="picks-note">Score 0–100</span>'
         "</div>"
@@ -1503,6 +1744,558 @@ def _scenario_table(planned: PlannedCandidate) -> str:
     )
 
 
+def _planned_candidate_detail(
+    planned: PlannedCandidate,
+    report: PremarketReport,
+    news: Optional[NewsFeed] = None,
+    *,
+    main: bool = False,
+) -> str:
+    """Full kandidatvisning med plan, nyheter, risiko og scenarier."""
+    candidate = planned.candidate
+    stock = candidate.stock
+    trade = planned.trade
+    settings = report.settings
+
+    reasons = "".join(f"<li>{_e(item)}</li>" for item in candidate.reasons)
+    warning_items = "".join(
+        f"<li>{_e(item)}</li>" for item in candidate.warnings
+    )
+    if main:
+        warning_items += "".join(
+            f"<li>{_e(item)}</li>" for item in report.warnings
+        )
+    if not warning_items:
+        warning_items = "<li>Ingen særskilte risikoadvarsler.</li>"
+
+    categories_html = (
+        _category_badges(planned.category_labels)
+        or '<span class="muted">Ingen kategori</span>'
+    )
+    resistance_text = (
+        f"{_e(format_price(candidate.resistance))} kr "
+        f"({_e(format_pct(candidate.technical_upside))})"
+        if candidate.resistance is not None
+        else "Åpent rom over kjent topp"
+    )
+    support_text = (
+        f"{_e(format_price(candidate.support))} kr"
+        if candidate.support is not None
+        else "Ingen tydelig støtte i datagrunnlaget"
+    )
+
+    blocked_html = ""
+    if planned.block_reasons:
+        block_items = "".join(
+            f"<li>{_e(item)}</li>" for item in planned.block_reasons
+        )
+        blocked_html = (
+            '<div class="candidate-blocked">'
+            "<strong>Ikke anbefalt som hovedhandel</strong>"
+            f'<ul class="report-list warnings">{block_items}</ul>'
+            "</div>"
+        )
+
+    return f"""
+      <div class="main-pick candidate-detail">
+        <div class="main-pick-head">
+          <div>
+            <div class="pick-title">
+              <a class="pick-ticker" href="{_e(nordnet_url(stock))}" target="_blank" rel="noopener noreferrer">{_e(stock.ticker)}</a>
+              <span class="pick-name">{_e(stock.name)}</span>
+              {categories_html}
+            </div>
+            <p class="main-reasons">{_e(" · ".join(candidate.reasons))}</p>
+            <p class="muted">{_e(stock.sector)} · {_e(format_market_cap(stock.market_cap))} · RSI {_e(DASH if stock.rsi is None else f"{stock.rsi:.0f}")}</p>
+          </div>
+          <div class="score-row">
+            {_score_box("Total", candidate.score, "relativ poengsum")}
+            {_score_box("Mulighet", candidate.opportunity_score, "teknisk + nyheter")}
+            {_score_box("Risiko", candidate.risk_score, candidate.risk_level)}
+          </div>
+        </div>
+        {blocked_html}
+        <div class="report-grid">
+          <div><span>Siste sluttkurs</span><strong>{_e(format_price(stock.close))} kr</strong><small>estimat for neste åpning</small></div>
+          <div><span>Antall aksjer</span><strong>{trade.shares}</strong><small>hele aksjer, ikke brøkdeler</small></div>
+          <div><span>Kapitalbruk</span><strong>{_e(format_money(trade.total_cost))}</strong><small>inkl. kurtasje {_e(format_money(trade.buy_fee))} kjøp / {_e(format_money(trade.sell_fee))} salg</small></div>
+          <div><span>Gevinstmål</span><strong>{_e(format_price(trade.target_price))} kr</strong><small>{_e(format_pct(settings.trade.target_pct))} · netto {_e(format_money(trade.target_net, signed=True))}</small></div>
+          <div><span>Tapsgrense</span><strong>{_e(format_price(trade.stop_price))} kr</strong><small>{_e(format_pct(-settings.trade.stop_loss_pct))} · netto {_e(format_money(trade.stop_net, signed=True))}</small></div>
+          <div><span>Gevinst/tap</span><strong>{_e(DASH if trade.reward_risk is None else f"{trade.reward_risk:.1f}:1")}</strong><small>etter kurtasje</small></div>
+        </div>
+        <div class="report-cols">
+          <div>
+            <h3>Hvorfor denne aksjen</h3>
+            <ul class="report-list">{reasons}</ul>
+            <h3>Tekniske nivåer</h3>
+            <ul class="report-list">
+              <li>Motstand: {resistance_text}</li>
+              <li>Støtte: {support_text}</li>
+              <li>Breakout-status: {_e(candidate.breakout_status)}</li>
+              <li>Volumforhold: {_e(DASH if candidate.volume_ratio is None else f"{candidate.volume_ratio:.1f}×")}</li>
+              <li>ATR: {_e(format_pct(stock.atr_pct))}</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Nyheter og hendelsestype</h3>
+            {_planned_news_html(planned, news)}
+            <h3>Risiko og forbehold</h3>
+            <ul class="report-list warnings">{warning_items}</ul>
+            <p class="muted">Sjekk volum og nyheter etter åpning. Rapporten utfører ingen handler.</p>
+          </div>
+        </div>
+        <h3>Gevinst- og tapsscenarioer</h3>
+        {_scenario_table(planned)}
+        <p class="report-note">Kjøpsprisen er estimert fra siste sluttkurs. Faktisk åpningskurs og kurtasje kan avvike. Scenariene er netto etter kurtasje og eventuell konfigurert slippage, men før skatt.</p>
+        <h3>Følg med etter åpning</h3>
+        <p class="report-note">Bekreft at kursen holder seg over siste sluttkurs og SMA5 ({_e(format_price(stock.sma5))} kr), og at volumet er unormalt høyt. Ved negativ nyhet eller brudd på støtten: vurder å stå over eller bruk tapsgrensen.</p>
+      </div>
+    """
+
+
+def _datetime_local(value: datetime) -> str:
+    return value.astimezone().strftime("%Y-%m-%dT%H:%M")
+
+
+def _with_trade_edit(url: str, trade_id: int) -> str:
+    parsed = urlparse(url)
+    query = parse_qs(parsed.query, keep_blank_values=True)
+    query["edit_trade"] = [str(trade_id)]
+    return parsed._replace(
+        query=urlencode(query, doseq=True),
+        fragment="journal",
+    ).geturl()
+
+
+def _journal_section(
+    journal: Optional[Journal],
+    status: Optional[str] = None,
+    error: Optional[str] = None,
+    next_url: str = "/#journal",
+    default_fee: float = 29.0,
+    default_sell_fee: Optional[float] = None,
+    edit_trade_id: Optional[int] = None,
+) -> str:
+    if journal is None:
+        if not error:
+            return ""
+        return (
+            '<section class="report journal" id="journal" aria-label="Handelsdagbok">'
+            "<h2>Handelsdagbok</h2>"
+            f'<div class="warning">Dagboken kunne ikke leses: {_e(error)}</div>'
+            "<p>Rett JSON-filen; appen leser den på nytt ved neste sideinnlasting. "
+            "Ingen handler er sendt eller endret.</p>"
+            "</section>"
+        )
+
+    if default_sell_fee is None:
+        default_sell_fee = default_fee
+    summary = summarize_journal(journal)
+    status_text = {
+        "trade": "Handelen er loggført lokalt.",
+        "edited": "Handelen er oppdatert lokalt.",
+        "cash": "Ledig kapital er oppdatert.",
+        "imported": "Dagboken er importert og erstattet.",
+    }.get(status or "", "")
+    notice = (
+        f'<div class="journal-notice">{_e(status_text)}</div>'
+        if status_text
+        else ""
+    )
+    error_html = (
+        f'<div class="warning">{_e(error)}</div>' if error else ""
+    )
+    now_value = datetime.now().astimezone().strftime("%Y-%m-%dT%H:%M")
+    open_positions = len(summary.holdings)
+    position_note = ""
+    if open_positions == 1:
+        position_note = (
+            '<p class="journal-hint">Du har én åpen posisjon i loggen. '
+            "Rapporten nedenfor planlegger en ny handel med ledig kapital.</p>"
+        )
+    elif open_positions > 1:
+        position_note = (
+            '<p class="journal-hint warning-text">Du har flere enn én åpen posisjon '
+            "i loggen. Strategien er laget for én aksje om gangen.</p>"
+        )
+    if any(item.quantity < 0 for item in summary.holdings):
+        position_note += (
+            '<p class="journal-hint warning-text">En beholdning er negativ. '
+            "Du har logget et salg uten en registrert inngang; legg inn det "
+            "historiske kjøpet for riktig kostpris.</p>"
+        )
+
+    edit_trade = None
+    if edit_trade_id is not None:
+        edit_trade = next(
+            (item for item in journal.trades if item.id == edit_trade_id),
+            None,
+        )
+        if edit_trade is None:
+            error_html += (
+                f'<div class="warning">Fant ikke handel nummer {edit_trade_id}.</div>'
+            )
+    edit_html = ""
+    if edit_trade is not None:
+        last_edited = (
+            f" Sist redigert {_e(format_datetime(edit_trade.edited_at))}."
+            if edit_trade.edited_at
+            else ""
+        )
+        buy_selected = " selected" if edit_trade.side == "buy" else ""
+        sell_selected = " selected" if edit_trade.side == "sell" else ""
+        edit_html = f"""
+      <div class="journal-box edit-trade">
+        <h3>Rediger handel #{edit_trade.id}</h3>
+        <p class="journal-hint">Endringen justerer ledig kapital med differansen
+        mellom gammel og ny kontantstrøm og lagres lokalt.{last_edited}</p>
+        <form class="journal-form" method="post" action="/journal/edit" accept-charset="utf-8">
+          <input type="hidden" name="trade_id" value="{edit_trade.id}">
+          <input type="hidden" name="next" value="{_e(next_url)}">
+          <label class="wide"><span>Tidspunkt</span><input type="datetime-local" name="executed_at" value="{_datetime_local(edit_trade.executed_at)}" required></label>
+          <label><span>Ticker</span><input type="text" name="ticker" value="{_e(edit_trade.ticker)}" maxlength="20" autocomplete="off" required></label>
+          <label><span>Side</span><select name="side"><option value="buy"{buy_selected}>Kjøp</option><option value="sell"{sell_selected}>Salg</option></select></label>
+          <label><span>Antall aksjer</span><input type="number" name="quantity" min="1" step="1" value="{edit_trade.quantity}" required></label>
+          <label><span>Kurs (NOK)</span><input type="number" name="price" min="0.0001" step="0.0001" value="{edit_trade.price:.4f}" required></label>
+          <label><span>Kurtasje (NOK)</span><input type="number" name="fee" min="0" step="0.01" value="{edit_trade.fee:.2f}" required></label>
+          <label class="wide"><span>Notat</span><input type="text" name="note" maxlength="500" value="{_e(edit_trade.note)}" placeholder="Valgfritt"></label>
+          <button class="btn" type="submit">Lagre endring</button>
+          <a class="btn ghost" href="{_e(next_url)}">Avbryt</a>
+        </form>
+        <p class="journal-note">Opprinnelig kontantstrøm: {_e(format_money(edit_trade.cash_change, signed=True))}.
+        Redigeringen kan avvises dersom den gir negativ ledig kapital.</p>
+      </div>
+        """
+
+    holdings_rows = "".join(
+        "<tr>"
+        f'<td class="ticker">{_e(item.ticker)}</td>'
+        f'<td class="num">{item.quantity}</td>'
+        f'<td class="num">{_e(DASH if item.average_cost is None else format_price(item.average_cost))}</td>'
+        f'<td class="num">{_e(format_money(item.cost_basis))}</td>'
+        "</tr>"
+        for item in summary.holdings
+    )
+    holdings_html = (
+        '<div class="table-wrap"><table class="mini-table"><thead><tr>'
+        "<th>Ticker</th><th>Antall</th><th>Snittkost</th><th>Kostpris</th>"
+        f"</tr></thead><tbody>{holdings_rows}</tbody></table></div>"
+        if summary.holdings
+        else '<p class="muted">Ingen åpne posisjoner er loggført.</p>'
+    )
+
+    quick_sell_cards = "".join(
+        '<details class="quick-sell">'
+        f'<summary>Selg alt · {_e(item.ticker)} ({item.quantity} aksjer)</summary>'
+        '<form class="journal-form" method="post" action="/journal/trade" accept-charset="utf-8">'
+        f'<input type="hidden" name="next" value="{_e(next_url)}">'
+        f'<input type="hidden" name="ticker" value="{_e(item.ticker)}">'
+        '<input type="hidden" name="side" value="sell">'
+        f'<input type="hidden" name="quantity" value="{item.quantity}">'
+        f'<input type="hidden" name="fee" value="{default_sell_fee:.2f}">'
+        '<input type="hidden" name="note" value="Hurtigsalg av hele beholdningen">'
+        f'<label class="wide"><span>Tidspunkt</span><input type="datetime-local" name="executed_at" value="{now_value}" required></label>'
+        '<label class="wide"><span>Salgskurs (NOK)</span><input type="number" name="price" min="0.0001" step="0.0001" placeholder="102,00" required></label>'
+        f'<button class="btn wide" type="submit">Selg {item.quantity} aksjer</button>'
+        '</form>'
+        '<p class="journal-note">Kurtasje '
+        f'{_e(format_money(default_sell_fee))} trekkes fra. Salget gjelder hele beholdningen.</p>'
+        '</details>'
+        for item in summary.holdings
+        if item.quantity > 0
+    )
+    quick_sell_html = (
+        "<h3>Hurtigsalg</h3>"
+        '<p class="journal-hint">Selg hele beholdningen med bare tidspunkt og kurs. '
+        f"Kurtasje settes til {_e(format_money(default_sell_fee))}.</p>"
+        f"{quick_sell_cards}"
+        if quick_sell_cards
+        else ""
+    )
+
+    trades = sorted(
+        journal.trades,
+        key=lambda item: (item.executed_at, item.id),
+        reverse=True,
+    )
+
+    def _trade_row(item) -> str:
+        edited_badge = (
+            '<br><span class="journal-edited" title="Redigert '
+            f'{_e(format_datetime(item.edited_at))}">redigert</span>'
+            if item.edited_at
+            else ""
+        )
+        return (
+            "<tr>"
+            f'<td>{_e(format_datetime(item.executed_at))}{edited_badge}</td>'
+            f'<td><span class="trade-side {item.side}">{_e(item.side_label)}</span></td>'
+            f'<td class="ticker">{_e(item.ticker)}</td>'
+            f'<td class="num">{item.quantity}</td>'
+            f'<td class="num">{_e(format_price(item.price))}</td>'
+            f'<td class="num">{_e(format_money(item.fee))}</td>'
+            f'<td class="num {"pos" if item.cash_change > 0 else "neg"}">'
+            f"{_e(format_money(item.cash_change, signed=True))}</td>"
+            f'<td class="journal-note">{_e(item.note or DASH)}</td>'
+            f'<td><a class="btn ghost small" href="{_e(_with_trade_edit(next_url, item.id))}">Rediger</a></td>'
+            "</tr>"
+        )
+
+    trade_rows = "".join(_trade_row(item) for item in trades)
+    trades_html = (
+        '<div class="table-wrap journal-trades"><table class="mini-table"><thead><tr>'
+        "<th>Tid</th><th>Side</th><th>Ticker</th><th>Antall</th><th>Kurs</th>"
+        "<th>Kurtasje</th><th>Kontantstrøm</th><th>Notat</th><th>Handling</th>"
+        f"</tr></thead><tbody>{trade_rows}</tbody></table></div>"
+        if trades
+        else '<p class="muted">Ingen handler er loggført ennå.</p>'
+    )
+
+    adjustment_rows = "".join(
+        "<tr>"
+        f'<td>{_e(format_datetime(item.changed_at))}</td>'
+        f'<td class="num">{_e(format_money(item.previous_cash))}</td>'
+        f'<td class="num">{_e(format_money(item.new_cash))}</td>'
+        f'<td class="num {"pos" if item.difference > 0 else "neg"}">'
+        f"{_e(format_money(item.difference, signed=True))}</td>"
+        f'<td class="journal-note">{_e(item.note or DASH)}</td>'
+        "</tr>"
+        for item in reversed(journal.adjustments[-20:])
+    )
+    adjustments_html = (
+        '<details class="reasons"><summary>Saldojusteringer '
+        f"({len(journal.adjustments)})</summary>"
+        '<div class="table-wrap"><table class="mini-table"><thead><tr>'
+        "<th>Tid</th><th>Fra</th><th>Til</th><th>Endring</th><th>Notat</th>"
+        f"</tr></thead><tbody>{adjustment_rows}</tbody></table></div></details>"
+        if journal.adjustments
+        else ""
+    )
+
+    realized_class = "pos" if summary.realized_profit >= 0 else "neg"
+    return f"""
+    <section class="report journal" id="journal" aria-label="Handelsdagbok og ledig kapital">
+      <div class="report-head">
+        <div>
+          <p class="eyebrow">Lokal konto · manuell registrering</p>
+          <h2>Handelsdagbok og ledig kapital</h2>
+          <p>Loggfør handler etter at de er utført. Rapporten og handelsplanen bruker
+          ledig kapital som størrelse på neste tenkte handel. Ingen ordrer sendes.</p>
+        </div>
+        <div class="report-stamp">
+          <span>Sist oppdatert</span>
+          <strong>{_e(format_datetime(journal.updated_at))}</strong>
+          <small>{len(journal.trades)} handler · {open_positions} posisjoner</small>
+        </div>
+      </div>
+      {notice}{error_html}
+      <div class="journal-stats">
+        <div><span>Ledig kapital</span><strong>{_e(format_money(summary.available_cash))}</strong><small>brukes i rapporten</small></div>
+        <div><span>Realisert resultat</span><strong class="{realized_class}">{_e(format_money(summary.realized_profit, signed=True))}</strong><small>beregnet fra loggen</small></div>
+        <div><span>Kurtasje totalt</span><strong>{_e(format_money(summary.total_fees))}</strong><small>{summary.buy_count} kjøp · {summary.sell_count} salg</small></div>
+        <div><span>Omsetning</span><strong>{_e(format_money(summary.total_turnover))}</strong><small>kjøp og salg før kurtasje</small></div>
+      </div>
+      {position_note}
+      {edit_html}
+      <div class="journal-grid">
+        <div class="journal-box">
+          <h3>Loggfør utført handel</h3>
+          <form class="journal-form" method="post" action="/journal/trade" accept-charset="utf-8">
+            <input type="hidden" name="next" value="{_e(next_url)}">
+            <label class="wide"><span>Tidspunkt</span><input type="datetime-local" name="executed_at" value="{now_value}" required></label>
+            <label><span>Ticker</span><input type="text" name="ticker" placeholder="EQNR" maxlength="20" autocomplete="off" required></label>
+            <label><span>Side</span><select name="side"><option value="buy">Kjøp</option><option value="sell">Salg</option></select></label>
+            <label><span>Antall aksjer</span><input type="number" name="quantity" min="1" step="1" placeholder="49" required></label>
+            <label><span>Kurs (NOK)</span><input type="number" name="price" min="0.0001" step="0.0001" placeholder="100,00" required></label>
+            <label><span>Kurtasje (NOK)</span><input type="number" name="fee" min="0" step="0.01" value="{default_fee:.2f}" required></label>
+            <label class="wide"><span>Notat</span><input type="text" name="note" maxlength="500" placeholder="Valgfritt – f.eks. limit, megler eller avvik"></label>
+            <button class="btn wide" type="submit">Loggfør handel</button>
+          </form>
+        </div>
+        <div class="journal-box">
+          <h3>Oppdater ledig kapital</h3>
+          <form class="journal-form" method="post" action="/journal/cash" accept-charset="utf-8">
+            <input type="hidden" name="next" value="{_e(next_url)}">
+            <label><span>Ny saldo (NOK)</span><input type="number" name="amount" min="0" step="0.01" value="{summary.available_cash:.2f}" required></label>
+            <label><span>Notat</span><input type="text" name="note" maxlength="500" placeholder="Valgfritt – f.eks. innskudd eller korrigering"></label>
+            <button class="btn wide" type="submit">Sett ledig kapital</button>
+          </form>
+          <p class="journal-note">Dette er en manuell kontosaldo, ikke en bankintegrasjon. Kjøp trekker fra og salg legger til automatisk når du logger en handel.</p>
+          <h3>Netto logget beholdning</h3>
+          {holdings_html}
+          {quick_sell_html}
+        </div>
+      </div>
+      <div class="journal-box datafile">
+        <h3>Datafil</h3>
+        <p class="journal-hint">Dagboken ligger som en JSON-fil. Last ned den for
+        backup eller for å flytte den til en annen datamaskin eller telefon.</p>
+        <p><a class="btn ghost" href="/journal/export">Last ned dagbok (JSON)</a></p>
+        <form class="journal-form" method="post" action="/journal/import"
+              enctype="multipart/form-data" accept-charset="utf-8">
+          <label class="wide"><span>Importer dagbokfil</span>
+            <input type="file" name="journal_file" accept="application/json,.json" required>
+          </label>
+          <button class="btn wide" type="submit">Importer og erstatt dagboken</button>
+        </form>
+        <p class="journal-note">Import erstatter dagboken som ligger på serveren.
+        Ta en nedlasting først hvis du er usikker. Filen inneholder bare det du
+        selv har logget – ingen bankdata eller meglerpålogging.</p>
+      </div>
+      <h3>Handler ({len(journal.trades)})</h3>
+      {trades_html}
+      {adjustments_html}
+    </section>
+    """
+
+
+def _logout_html(auth_enabled: bool) -> str:
+    if not auth_enabled:
+        return ""
+    return (
+        '<form class="logout-form" method="post" action="/logout">'
+        '<button class="btn ghost small" type="submit">Logg ut</button>'
+        "</form>"
+    )
+
+
+def render_login_page(
+    *,
+    next_url: str = "/",
+    error: Optional[str] = None,
+) -> str:
+    """Enkel innloggingsside for skykjøring."""
+    error_html = (
+        f'<p class="login-error" role="alert">{_e(error)}</p>' if error else ""
+    )
+    return f"""<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  {_PWA_HEAD}
+  <title>Logg inn · Tollbugata Profits</title>
+  <style>{_CSS}</style>
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Tollbugata Profits · privat</p>
+        <h1>Logg inn</h1>
+        <p class="lede">Appen er passordbeskyttet fordi den kan nås fra internett.
+        Passordet sendes bare over HTTPS.</p>
+      </div>
+    </header>
+    <section class="panel">
+      {error_html}
+      <form class="journal-form" method="post" action="/login">
+        <input type="hidden" name="next" value="{_e(next_url)}">
+        <label class="wide"><span>Passord</span>
+          <input type="password" name="password" required autofocus
+                 autocomplete="current-password">
+        </label>
+        <button class="btn wide" type="submit">Logg inn</button>
+      </form>
+      <p class="login-note">Har du glemt passordet, må det endres i miljøvariabelen
+      <code>TP_PASSWORD</code> der appen kjører.</p>
+    </section>
+  </div>
+  <script>{_PWA_SCRIPT}</script>
+</body>
+</html>
+"""
+
+
+def _tabs_html(active: str) -> str:
+    tabs = (
+        ("kurs", "Kursinformasjon", "/"),
+        ("logg", "Handelsdagbok", "/logg"),
+    )
+    links = "".join(
+        f'<a class="tab{" active" if key == active else ""}" href="{url}"'
+        f'{" aria-current=\"page\"" if key == active else ""}>{_e(label)}</a>'
+        for key, label, url in tabs
+    )
+    return f'<nav class="tabs" aria-label="Hovedvisninger">{links}</nav>'
+
+
+def render_journal_page(
+    journal: Optional[Journal],
+    *,
+    status: Optional[str] = None,
+    error: Optional[str] = None,
+    next_url: str = "/logg#journal",
+    buy_fee: float = 29.0,
+    sell_fee: float = 29.0,
+    edit_trade_id: Optional[int] = None,
+    backtest: Optional[dict] = None,
+    history: Optional[list[dict]] = None,
+    auth_enabled: bool = False,
+) -> str:
+    """Selvstendig dagbokside uten markedsdata, slik at loggen virker offline."""
+    journal_html = _journal_section(
+        journal,
+        status=status,
+        error=error,
+        next_url=next_url,
+        default_fee=buy_fee,
+        default_sell_fee=sell_fee,
+        edit_trade_id=edit_trade_id,
+    )
+    updated = (
+        _e(format_datetime(journal.updated_at))
+        if journal is not None
+        else "ikke tilgjengelig"
+    )
+    trade_count = len(journal.trades) if journal is not None else 0
+    backtest_html = _backtest_section(backtest)
+    history_html = _history_section(history)
+    return f"""<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  {_PWA_HEAD}
+  <title>Handelsdagbok · Tollbugata Profits</title>
+  <style>{_CSS}</style>
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Lokal konto · manuell registrering</p>
+        <h1>Handelsdagbok</h1>
+        <p class="lede">Loggfør utførte handler, rett feil og hold ledig kapital oppdatert.
+        Lenger ned finner du historisk test og tidligere morgenrapporter.
+        Alt lagres lokalt på denne maskinen. Ingen ordrer sendes.</p>
+      </div>
+      <div class="stamp">
+        <span>Dagbok oppdatert</span>
+        <strong>{updated}</strong>
+        <span class="source">{trade_count} handler · ingen automatisk handel</span>
+      </div>
+    </header>
+    {_tabs_html("logg")}
+    {_install_banner()}
+    {journal_html}
+    {backtest_html}
+    {history_html}
+    <div class="foot">
+      <p>Dagboken er lokal runtime-data i <code>data/journal.json</code>. Den brukes som
+      ledig kapital i rapporten og handelsplanen på kursfanen.</p>
+      <p><a href="/">Tilbake til kursinformasjon</a></p>
+      {_logout_html(auth_enabled)}
+    </div>
+  </div>
+  <script>{_PWA_SCRIPT}</script>
+</body>
+</html>
+"""
+
+
 def _premarket_section(
     report: PremarketReport,
     criteria: Criteria,
@@ -1545,8 +2338,9 @@ def _premarket_section(
                 news.for_stock(item.candidate.stock) if news is not None else (),
                 news,
                 planned=item,
+                detail_html=_planned_candidate_detail(item, report, news),
             )
-            for index, item in enumerate(report.alternatives, 1)
+            for index, item in enumerate(report.blocked, 1)
         )
         body = (
             '<div class="no-trade">'
@@ -1559,6 +2353,8 @@ def _premarket_section(
         if alternatives:
             body += (
                 "<h3>Mulige alternativer – ikke anbefalt som hovedhandel</h3>"
+                '<p class="muted">Klikk på en kandidat for detaljer om plan, '
+                "nyheter, risiko og scenarier.</p>"
                 f'<ol class="pick-list">{alternatives}</ol>'
             )
         return (
@@ -1567,29 +2363,6 @@ def _premarket_section(
         )
 
     main = report.main
-    candidate = main.candidate
-    stock = candidate.stock
-    trade = main.trade
-    warnings = "".join(f"<li>{_e(item)}</li>" for item in candidate.warnings)
-    report_warnings = "".join(f"<li>{_e(item)}</li>" for item in report.warnings)
-    reasons = "".join(f"<li>{_e(item)}</li>" for item in candidate.reasons)
-    categories_html = _category_badges(main.category_labels) or '<span class="muted">Ingen kategori</span>'
-    resistance_text = (
-        f"{_e(format_price(candidate.resistance))} kr "
-        f"({_e(format_pct(candidate.technical_upside))})"
-        if candidate.resistance is not None
-        else "Åpent rom over kjent topp"
-    )
-    support_text = (
-        f"{_e(format_price(candidate.support))} kr"
-        if candidate.support is not None
-        else "Ingen tydelig støtte i datagrunnlaget"
-    )
-    risk_class = {
-        "Lav": "risk-low",
-        "Middels": "risk-medium",
-        "Høy": "risk-high",
-    }.get(candidate.risk_level, "risk-medium")
     alt_cards = "".join(
         _candidate_card(
             index,
@@ -1598,66 +2371,38 @@ def _premarket_section(
             news.for_stock(item.candidate.stock) if news is not None else (),
             news,
             planned=item,
+            detail_html=_planned_candidate_detail(item, report, news),
         )
         for index, item in enumerate(report.alternatives, 1)
     )
+    blocked_cards = "".join(
+        _candidate_card(
+            index,
+            item.candidate,
+            is_at_high(item.candidate.stock, criteria),
+            news.for_stock(item.candidate.stock) if news is not None else (),
+            news,
+            planned=item,
+            detail_html=_planned_candidate_detail(item, report, news),
+        )
+        for index, item in enumerate(report.blocked, 1)
+    )
+    blocked_html = ""
+    if blocked_cards:
+        blocked_html = f"""
+      <h3>Ikke anbefalte kandidater ({len(report.blocked)})</h3>
+      <p class="muted">Disse kan ha høy totalscore, men er blokkert av score-,
+      risiko- eller likviditetskrav. De vises bare som informasjon og er ikke
+      en anbefaling.</p>
+      <ol class="pick-list blocked-list">{blocked_cards}</ol>
+        """
     body = f"""
-      <div class="main-pick">
-        <div class="main-pick-head">
-          <div>
-            <div class="pick-title">
-              <a class="pick-ticker" href="{_e(nordnet_url(stock))}" target="_blank" rel="noopener noreferrer">{_e(stock.ticker)}</a>
-              <span class="pick-name">{_e(stock.name)}</span>
-              {categories_html}
-            </div>
-            <p class="main-reasons">{_e(" · ".join(candidate.reasons))}</p>
-            <p class="muted">{_e(stock.sector)} · {_e(format_market_cap(stock.market_cap))} · RSI {_e(DASH if stock.rsi is None else f"{stock.rsi:.0f}")}</p>
-          </div>
-          <div class="score-row">
-            {_score_box("Total", candidate.score, "relativ poengsum")}
-            {_score_box("Mulighet", candidate.opportunity_score, "teknisk + nyheter")}
-            {_score_box("Risiko", candidate.risk_score, candidate.risk_level)}
-          </div>
-        </div>
-        <div class="report-grid">
-          <div><span>Siste sluttkurs</span><strong>{_e(format_price(stock.close))} kr</strong><small>estimat for neste åpning</small></div>
-          <div><span>Antall aksjer</span><strong>{trade.shares}</strong><small>hele aksjer, ikke brøkdeler</small></div>
-          <div><span>Kapitalbruk</span><strong>{_e(format_money(trade.total_cost))}</strong><small>inkl. kurtasje {_e(format_money(trade.buy_fee))} kjøp / {_e(format_money(trade.sell_fee))} salg</small></div>
-          <div><span>Gevinstmål</span><strong>{_e(format_price(trade.target_price))} kr</strong><small>{_e(format_pct(report.settings.trade.target_pct))} · netto {_e(format_money(trade.target_net, signed=True))}</small></div>
-          <div><span>Tapsgrense</span><strong>{_e(format_price(trade.stop_price))} kr</strong><small>{_e(format_pct(-report.settings.trade.stop_loss_pct))} · netto {_e(format_money(trade.stop_net, signed=True))}</small></div>
-          <div><span>Gevinst/tap</span><strong>{_e(DASH if trade.reward_risk is None else f"{trade.reward_risk:.1f}:1")}</strong><small>etter kurtasje</small></div>
-        </div>
-        <div class="report-cols">
-          <div>
-            <h3>Hvorfor denne aksjen</h3>
-            <ul class="report-list">{reasons}</ul>
-            <h3>Tekniske nivåer</h3>
-            <ul class="report-list">
-              <li>Motstand: {resistance_text}</li>
-              <li>Støtte: {support_text}</li>
-              <li>Breakout-status: {_e(candidate.breakout_status)}</li>
-              <li>Volumforhold: {_e(DASH if candidate.volume_ratio is None else f"{candidate.volume_ratio:.1f}×")}</li>
-              <li>ATR: {_e(format_pct(stock.atr_pct))}</li>
-            </ul>
-          </div>
-          <div>
-            <h3>Nyheter og hendelsestype</h3>
-            {_planned_news_html(main, news)}
-            <h3>Risiko og forbehold</h3>
-            <ul class="report-list warnings">{warnings}{report_warnings}</ul>
-            <p class="muted">Sjekk spread, volum og nyheter etter åpning. Rapporten utfører ingen handler.</p>
-          </div>
-        </div>
-        <h3>Gevinst- og tapsscenarioer</h3>
-        {_scenario_table(main)}
-        <p class="report-note">Kjøpsprisen er estimert fra siste sluttkurs. Faktisk åpningskurs, spread og kurtasje kan avvike. Scenariene er netto etter kurtasje og eventuell konfigurert slippage, men før skatt.</p>
-        <h3>Følg med etter åpning</h3>
-        <p class="report-note">Bekreft at kursen holder seg over siste sluttkurs og SMA5 ({_e(format_price(stock.sma5))} kr), at volumet er unormalt høyt, og at spreaden er akseptabel. Ved negativ nyhet eller brudd på støtten: vurder å stå over eller bruk tapsgrensen.</p>
-      </div>
+      {_planned_candidate_detail(main, report, news, main=True)}
       <div class="chips">{category_chips}</div>
-      <h3>Alternativer ({len(report.alternatives)})</h3>
-      <p class="muted">Kandidatene er rangert etter samlet score. Kortene viser også hva som taler imot.</p>
-      <ol class="pick-list">{alt_cards or '<li class="muted">Ingen alternativer.</li>'}</ol>
+      <h3>Anbefalte alternativer ({len(report.alternatives)})</h3>
+      <p class="muted">Klikk på en kandidat for samme detaljer som hovedkandidaten.</p>
+      <ol class="pick-list">{alt_cards or '<li class="muted">Ingen anbefalte alternativer.</li>'}</ol>
+      {blocked_html}
     """
     return (
         '<section class="report" aria-label="Dagens pre-market-rapport">'
@@ -1892,8 +2637,12 @@ def render_dashboard(
     refresh_url: str = "/refresh",
     news: Optional[NewsFeed] = None,
     report: Optional[PremarketReport] = None,
-    backtest: Optional[dict] = None,
-    history: Optional[list[dict]] = None,
+    journal: Optional[Journal] = None,
+    journal_status: Optional[str] = None,
+    journal_error: Optional[str] = None,
+    journal_next: str = "/#journal",
+    edit_trade_id: Optional[int] = None,
+    auth_enabled: bool = False,
 ) -> str:
     stocks = sort_stocks(result.matches, sort_by)
     if report is None:
@@ -1912,8 +2661,15 @@ def render_dashboard(
         for stock in stocks
     )
     report_html = _premarket_section(report, criteria, news)
-    backtest_html = _backtest_section(backtest)
-    history_html = _history_section(history)
+    journal_html = _journal_section(
+        journal,
+        status=journal_status,
+        error=journal_error,
+        next_url=journal_next,
+        default_fee=report.settings.trade.buy_fee,
+        default_sell_fee=report.settings.trade.sell_fee,
+        edit_trade_id=edit_trade_id,
+    )
     news_html = _news_section(news, stocks)
     at_high_count = result.at_high_count
     growth_hidden = result.excluded.get("euronext growth", 0)
@@ -1959,6 +2715,7 @@ def render_dashboard(
 
     action = ' action="/"' if web_mode else ""
     button_label = "Bruk" if web_mode else "Filtrer"
+    tabs_html = _tabs_html("kurs") if web_mode else ""
     refresh_link = (
         f'<a class="btn ghost" href="{_e(refresh_url)}">Hent på nytt</a>' if web_mode else ""
     )
@@ -2022,6 +2779,7 @@ def render_dashboard(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
+  {_PWA_HEAD}
   <title>Tollbugata Profits · Oslo Børs pre-market</title>
   <style>{_CSS}</style>
 </head>
@@ -2040,6 +2798,9 @@ def render_dashboard(
         <span class="source">Kilde: TradingView ({_e(source_label)})</span>
       </div>
     </header>
+
+    {tabs_html}
+    {_install_banner()}
 
     {warning_html}
 
@@ -2070,13 +2831,11 @@ def render_dashboard(
       {''.join(chips)}
     </div>
 
+    {journal_html}
+
     {report_html}
 
     {news_html}
-
-    {backtest_html}
-
-    {history_html}
 
     <section class="panel">
       <form id="filters" class="filters" method="get"{action}>
@@ -2131,10 +2890,12 @@ def render_dashboard(
         utfører ingen handler og er ikke investeringsråd.
       </p>
       <p>Kriterier: {_e(describe_criteria(criteria))}</p>
+      {_logout_html(auth_enabled)}
     </div>
   </div>
   <script>window.SCREENER = {config_json};</script>
   <script>{_JS}</script>
+  <script>{_PWA_SCRIPT}</script>
 </body>
 </html>
 """

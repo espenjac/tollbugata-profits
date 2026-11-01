@@ -237,6 +237,7 @@ def parse_payload(
                 name=name,
                 close=close,
                 currency=currency,
+                day_return=_percent(values.get("change")),
                 week_return=_percent(values.get("Perf.W")),
                 month_return=_percent(values.get("Perf.1M")),
                 quarter_return=_percent(values.get("Perf.3M")),

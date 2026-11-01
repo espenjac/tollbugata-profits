@@ -142,6 +142,128 @@ def _volume_ratio(stock: Stock) -> Optional[float]:
     return stock.volume / stock.average_volume_10d
 
 
+def _day_share(stock: Stock) -> Optional[float]:
+    """Hvor stor del av ukens oppgang som kom på siste handelsdag."""
+    day = stock.day_return
+    week = stock.week_return
+    if day is None or week is None or week <= 0 or day <= 0:
+        return None
+    return day / week
+
+
+def _is_smooth_day(stock: Stock, config: ScoringConfig) -> bool:
+    day = stock.day_return
+    share = _day_share(stock)
+    return (
+        day is not None
+        and 0.0 < day <= config.smooth_day_return
+        and share is not None
+        and share <= config.smooth_day_share
+    )
+
+
+def _is_day_spike(stock: Stock, config: ScoringConfig) -> bool:
+    day = stock.day_return
+    share = _day_share(stock)
+    return (
+        day is not None
+        and share is not None
+        and day >= config.spike_day_return
+        and share >= config.spike_day_share
+    )
+
+
+def _consistency_score(stock: Stock, config: ScoringConfig) -> float:
+    """Belønner jevn stigning og straffer et isolert ett-dagshopp."""
+    day = stock.day_return
+    week = stock.week_return
+    if day is None or week is None or week <= 0:
+        return 0.45
+    if day <= 0:
+        return 0.65
+    share = _day_share(stock)
+    if share is None:
+        return 0.45
+    if _is_smooth_day(stock, config):
+        return 1.0
+    if day >= config.strong_spike_day_return:
+        return 0.0
+    if _is_day_spike(stock, config):
+        span = max(
+            config.strong_spike_day_return - config.spike_day_return,
+            1e-9,
+        )
+        ramp = _clamp(1.0 - (day - config.spike_day_return) / span)
+        return 0.15 + 0.20 * ramp
+    if day <= config.smooth_day_return:
+        return 0.75
+    if day >= config.spike_day_return:
+        return 0.45
+    if share >= 0.75:
+        return 0.55
+    return 0.65
+
+
+def _spike_risk(
+    stock: Stock,
+    signal: NewsSignal,
+    config: ScoringConfig,
+) -> float:
+    """Jag-risiko ved et stort siste-dagshopp, justert for nyhet og volum."""
+    day = stock.day_return
+    if day is None:
+        return 0.20
+    if day <= 0:
+        return 0.0
+
+    share = _day_share(stock)
+    if share is None:
+        share = 0.0
+
+    if day >= config.strong_spike_day_return:
+        risk = 1.0
+    elif _is_day_spike(stock, config):
+        span = max(
+            config.strong_spike_day_return - config.spike_day_return,
+            1e-9,
+        )
+        risk = 0.55 + 0.40 * _clamp(
+            (day - config.spike_day_return) / span
+        )
+    elif day >= config.spike_day_return:
+        risk = 0.30
+    elif day <= config.smooth_day_return:
+        risk = 0.0 if share <= config.smooth_day_share else 0.10
+    else:
+        risk = 0.15
+
+    if risk <= 0:
+        return 0.0
+
+    if stock.rsi is not None and stock.rsi >= config.overextended_rsi:
+        risk = max(risk, 0.70)
+    if (
+        stock.sma5 is not None
+        and stock.sma5 > 0
+        and (stock.close / stock.sma5 - 1.0) >= config.spike_sma5_distance
+    ):
+        risk = max(risk, 0.60)
+
+    ratio = _volume_ratio(stock)
+    positive_news = (
+        signal.is_relevant
+        and signal.sentiment == "positive"
+        and signal.event_type != "capital_raise"
+    )
+    if positive_news and ratio is not None and ratio >= 1.5:
+        # En nyhetsdrevet bevegelse med volum er fortsatt risikofylt, men
+        # mindre sannsynlig å være ren tilfeldig jag.
+        risk *= 0.80
+    elif signal.is_relevant and signal.sentiment == "negative":
+        risk = min(1.0, risk + 0.15)
+    return _clamp(risk)
+
+
 def _news_opportunity(signal: NewsSignal) -> float:
     if signal.count == 0:
         return 0.45
@@ -171,8 +293,10 @@ def _breakout_status(stock: Stock, config: ScoringConfig, signal: NewsSignal) ->
     resistance = _resistance(stock)
     week = stock.week_return or 0.0
     rsi = stock.rsi
-    overextended = week > config.overextended_week or (
-        rsi is not None and rsi >= config.overextended_rsi
+    overextended = (
+        week > config.overextended_week
+        or (rsi is not None and rsi >= config.overextended_rsi)
+        or _is_day_spike(stock, config)
     )
     if resistance is None:
         # På eller over kjent topp: åpent rom, men også risiko for at utbruddet
@@ -204,6 +328,7 @@ def _categories(
         and stock.close > stock.sma20
         and week <= config.overextended_week
         and (stock.rsi is None or stock.rsi < config.overextended_rsi)
+        and not _is_day_spike(stock, config)
     )
     if stable_momentum:
         categories.append("momentum")
@@ -300,8 +425,10 @@ def _opportunity_components(
     breakout = (0.4 if near else 0.0) + (0.3 if consolidated else 0.0) + (
         0.3 if volume_support else 0.0
     )
-    if week > config.overextended_week or (
-        stock.rsi is not None and stock.rsi >= config.overextended_rsi
+    if (
+        week > config.overextended_week
+        or (stock.rsi is not None and stock.rsi >= config.overextended_rsi)
+        or _is_day_spike(stock, config)
     ):
         breakout *= 0.25
 
@@ -315,6 +442,7 @@ def _opportunity_components(
         "volatility": volatility,
         "news": _news_opportunity(signal),
         "breakout": breakout,
+        "consistency": _consistency_score(stock, config),
     }
 
 
@@ -395,34 +523,26 @@ def _risk_components(
     else:
         price_risk = 0.0
 
-    if stock.spread_pct is None:
-        spread = 0.20
-    elif stock.spread_pct > 0.005:
-        spread = 1.0
-    elif stock.spread_pct > 0.0025:
-        spread = 0.6
-    elif stock.spread_pct > 0.0015:
-        spread = 0.3
-    else:
-        spread = 0.0
 
     return {
         "volatility": volatility,
         "overextension": overextension,
+        "spike": _spike_risk(stock, signal, config),
         "liquidity": liquidity,
         "event": event,
         "negative_news": _news_risk(signal),
         "market_cap": market_cap,
         "price": price_risk,
-        "spread": spread,
     }
 
 
-def _reasons(stock: Stock) -> tuple[str, ...]:
-    reasons = [
-        f"Uke {format_pct(stock.week_return)}",
-        f"Måned {format_pct(stock.month_return)}",
-    ]
+def _reasons(stock: Stock, config: ScoringConfig) -> tuple[str, ...]:
+    reasons = [f"Uke {format_pct(stock.week_return)}"]
+    if stock.day_return is not None:
+        reasons.append(f"Dag {format_pct(stock.day_return)}")
+    reasons.append(f"Måned {format_pct(stock.month_return)}")
+    if _is_smooth_day(stock, config):
+        reasons.append("Jevn uke")
     if stock.sma20:
         trend_pct = (stock.close / stock.sma20 - 1.0) * 100.0
         reasons.append(f"{trend_pct:+.1f} % over SMA20".replace(".", ","))
@@ -440,8 +560,37 @@ def _warnings(
     signal: NewsSignal,
     today: date,
     breakout_status: str,
+    config: ScoringConfig,
 ) -> tuple[str, ...]:
     warnings: list[str] = []
+
+    day = stock.day_return
+    share = _day_share(stock)
+    if day is not None and day >= config.strong_spike_day_return:
+        warnings.append(
+            f"Stort dagshopp {format_pct(day)} – svært høy jagrisiko"
+        )
+    elif _is_day_spike(stock, config):
+        share_text = f" ({share * 100:.0f} % av uken)" if share else ""
+        positive_news = (
+            signal.is_relevant
+            and signal.sentiment == "positive"
+            and signal.event_type != "capital_raise"
+        )
+        if positive_news:
+            warnings.append(
+                f"Stort dagshopp {format_pct(day)}{share_text} – "
+                "mulig nyhetsdrevet, vent på pullback"
+            )
+        else:
+            warnings.append(
+                f"Stort dagshopp {format_pct(day)}{share_text} – "
+                "vent på pullback"
+            )
+    elif day is not None and day >= config.spike_day_return:
+        warnings.append(
+            f"Stor enkeltdag {format_pct(day)} – sjekk nyhet og volum"
+        )
 
     earnings = days_until(stock.earnings_date, today)
     if earnings == 0:
@@ -464,7 +613,7 @@ def _warnings(
     if breakout_status == "overstrukket":
         warnings.append("Nær høy, men allerede strukket")
     if stock.close < 10.0:
-        warnings.append("Kurs under 10 kr – større relativ spread")
+        warnings.append("Lav aksjekurs – større prosentvise bevegelser")
     if stock.average_turnover is None:
         warnings.append("Likviditet ukjent")
     elif stock.average_turnover < 10_000_000.0:
@@ -479,12 +628,6 @@ def _warnings(
         warnings.append("Negativ nyhet – sjekk kilden")
     elif signal.sentiment == "mixed" and signal.is_relevant:
         warnings.append("Blandet nyhetsbilde")
-    if stock.spread_pct is None:
-        warnings.append("Spread ikke tilgjengelig – sjekk etter åpning")
-    elif stock.spread_pct > 0.005:
-        warnings.append("Stor spread – bruk limit og vurder å stå over")
-    elif stock.spread_pct > 0.0025:
-        warnings.append("Spread over 0,25 % – sjekk etter åpning")
 
     return tuple(warnings)
 
@@ -513,8 +656,8 @@ def _build_candidate(
     return Candidate(
         stock=stock,
         score=score,
-        reasons=_reasons(stock),
-        warnings=_warnings(stock, signal, today, breakout_status),
+        reasons=_reasons(stock, config),
+        warnings=_warnings(stock, signal, today, breakout_status, config),
         opportunity_score=opportunity,
         risk_score=risk,
         categories=categories,

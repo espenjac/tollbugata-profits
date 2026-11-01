@@ -38,7 +38,7 @@ class Stock:
     ex_dividend_date: Optional[date] = None
     average_volume_10d: Optional[float] = None
     atr: Optional[float] = None
-    spread_pct: Optional[float] = None  # relativ spread hvis kilden oppgir den
+    day_return: Optional[float] = None  # siste handelsdags avkastning som brøk
 
     @property
     def is_growth(self) -> bool:

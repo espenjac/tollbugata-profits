@@ -19,15 +19,16 @@ T = TypeVar("T")
 class ScoringWeights:
     """Vekter for mulighetsscoren. Summen normaliseres av modellen."""
 
-    momentum: float = 0.18
-    trend: float = 0.15
-    relative_strength: float = 0.10
+    momentum: float = 0.16
+    trend: float = 0.14
+    relative_strength: float = 0.09
     liquidity: float = 0.15
-    volume: float = 0.10
+    volume: float = 0.09
     technical_upside: float = 0.08
-    volatility: float = 0.06
-    news: float = 0.12
-    breakout: float = 0.06
+    volatility: float = 0.05
+    news: float = 0.11
+    breakout: float = 0.05
+    consistency: float = 0.08
 
     @property
     def total(self) -> float:
@@ -42,14 +43,14 @@ class ScoringWeights:
 class RiskWeights:
     """Vekter for risikoscoren. Høyere risikoscore er dårligere."""
 
-    volatility: float = 0.20
-    overextension: float = 0.20
-    liquidity: float = 0.15
-    event: float = 0.15
-    negative_news: float = 0.15
+    volatility: float = 0.18
+    overextension: float = 0.18
+    spike: float = 0.12
+    liquidity: float = 0.14
+    event: float = 0.14
+    negative_news: float = 0.14
     market_cap: float = 0.05
     price: float = 0.05
-    spread: float = 0.05
 
     @property
     def total(self) -> float:
@@ -73,6 +74,12 @@ class ScoringConfig:
     breakout_distance: float = 0.05
     overextended_week: float = 0.15
     overextended_rsi: float = 75.0
+    smooth_day_return: float = 0.02
+    smooth_day_share: float = 0.40
+    spike_day_return: float = 0.04
+    spike_day_share: float = 0.60
+    strong_spike_day_return: float = 0.07
+    spike_sma5_distance: float = 0.05
     risk_penalty: float = 0.45
     weights: ScoringWeights = field(default_factory=ScoringWeights)
     risk_weights: RiskWeights = field(default_factory=RiskWeights)
@@ -87,7 +94,7 @@ class TradeConfig:
     sell_fee: float = 29.0
     target_pct: float = 0.02
     stop_loss_pct: float = 0.02
-    slippage_pct: float = 0.0  # ukjent spread/slippage settes til 0 som standard
+    slippage_pct: float = 0.0  # antatt slippage ved kjøp og salg, 0 som standard
     # Med 5 000 kr og 29 kr kurtasje er 1:1 etter kurtasje nesten umulig ved 2 %
     # mål. Forholdet vises i rapporten, men blokkerer ikke som standard.
     min_reward_risk: float = 0.0
@@ -98,6 +105,8 @@ class TradeConfig:
 class ReportConfig:
     """Krav for at en kandidat skal kunne bli dagens hovedanbefaling."""
 
+    # Gjelder både anbefalte alternativer og den separate listen over
+    # blokkerte kandidater.
     max_alternatives: int = 10
     min_total_score: float = 58.0
     min_opportunity: float = 55.0
@@ -161,9 +170,12 @@ def _from_dict(cls: type[T], data: Any) -> T:
                       "slippage_pct", "min_reward_risk", "min_price",
                       "min_market_cap", "min_average_turnover", "max_week_return",
                       "max_rsi", "target_atr_pct", "breakout_distance",
-                      "overextended_week", "overextended_rsi", "risk_penalty",
-                      "min_total_score", "min_opportunity", "max_risk",
-                      "min_turnover"}:
+                      "overextended_week", "overextended_rsi",
+                      "smooth_day_return", "smooth_day_share",
+                      "spike_day_return", "spike_day_share",
+                      "strong_spike_day_return", "spike_sma5_distance",
+                      "risk_penalty", "min_total_score", "min_opportunity",
+                      "max_risk", "min_turnover"}:
             try:
                 kwargs[name] = float(value)
             except (TypeError, ValueError) as exc:
@@ -233,5 +245,20 @@ def _validate(settings: Settings) -> None:
         raise ValueError("scenario_pcts må inneholde minst ett scenario.")
     if not 0.0 <= settings.scoring.risk_penalty <= 1.0:
         raise ValueError("risk_penalty må være mellom 0 og 1.")
+    if not (
+        0.0 <= settings.scoring.smooth_day_return
+        <= settings.scoring.spike_day_return
+        <= settings.scoring.strong_spike_day_return
+    ):
+        raise ValueError(
+            "Krever 0 ≤ smooth_day_return ≤ spike_day_return "
+            "≤ strong_spike_day_return."
+        )
+    for name in ("smooth_day_share", "spike_day_share"):
+        value = getattr(settings.scoring, name)
+        if not 0.0 <= value <= 1.0:
+            raise ValueError(f"{name} må være mellom 0 og 1.")
+    if settings.scoring.spike_sma5_distance < 0:
+        raise ValueError("spike_sma5_distance kan ikke være negativ.")
     if settings.report.max_alternatives < 0:
         raise ValueError("max_alternatives kan ikke være negativ.")

@@ -1,0 +1,10 @@
+.git
+.gitignore
+.venv
+__pycache__
+*.py[cod]
+.cache
+data
+reports
+rapport.html
+oslo_screen.html

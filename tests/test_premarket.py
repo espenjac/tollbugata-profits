@@ -34,7 +34,7 @@ from oslo_screener.premarket import (
     save_daily_report,
     save_report,
 )
-from oslo_screener.render import render_dashboard
+from oslo_screener.render import render_dashboard, render_journal_page
 from oslo_screener.serialize import premarket_to_dict, result_to_dict
 from oslo_screener.strategy import rank_candidates
 from oslo_screener.trade import build_trade_plan, simulate_net
@@ -263,15 +263,20 @@ class PremarketReportTests(unittest.TestCase):
         self.assertIn("news", candidates[0].categories)
         self.assertGreater(candidates[0].news_signal.count, 0)
 
+    def test_positive_news_with_volume_damps_spike_risk(self) -> None:
+        stock = make_stock(day_return=0.055, volume=2_500_000.0)
+        without_news = rank_candidates([stock])[0]
+        with_news = rank_candidates([stock], news=make_feed(make_news()))[0]
+        self.assertLess(with_news.risk_score, without_news.risk_score)
+        self.assertTrue(
+            any("nyhetsdrevet" in warning.lower() for warning in with_news.warnings)
+        )
+
     def test_upcoming_earnings_are_warned_about(self) -> None:
         stock = make_stock(earnings_date=date.today() + timedelta(days=5))
         candidate = rank_candidates([stock])[0]
         self.assertIn("Resultat om 5 dager", candidate.warnings)
 
-    def test_bad_spread_is_warned_about(self) -> None:
-        stock = make_stock(spread_pct=0.01)
-        candidate = rank_candidates([stock])[0]
-        self.assertIn("Stor spread – bruk limit og vurder å stå over", candidate.warnings)
 
     def test_main_can_be_found_below_first_ranked_candidate(self) -> None:
         blocked = make_stock(
@@ -289,10 +294,6 @@ class PremarketReportTests(unittest.TestCase):
                 event_type="capital_raise",
             )
         )
-        settings = replace(
-            Settings(),
-            report=replace(Settings().report, max_alternatives=0),
-        )
         result = screen([blocked, good], Criteria())
         ranked = rank_candidates(result.matches, news=news)
         self.assertEqual(ranked[0].stock.ticker, "BAD")
@@ -301,10 +302,40 @@ class PremarketReportTests(unittest.TestCase):
             Criteria(),
             make_universe([blocked, good]),
             news=news,
-            settings=settings,
         )
         self.assertIsNotNone(report.main)
         self.assertEqual(report.main.candidate.stock.ticker, "GOOD")
+        self.assertEqual(
+            [item.candidate.stock.ticker for item in report.blocked],
+            ["BAD"],
+        )
+        self.assertNotIn(
+            "BAD",
+            [item.candidate.stock.ticker for item in report.alternatives],
+        )
+        payload = premarket_to_dict(report, news=news)
+        self.assertEqual(
+            [item["ticker"] for item in payload["alternatives"]],
+            [],
+        )
+        self.assertEqual(
+            [item["ticker"] for item in payload["blocked"]],
+            ["BAD"],
+        )
+        page = render_dashboard(
+            result,
+            make_universe([blocked, good]),
+            Criteria(),
+            web_mode=False,
+            news=news,
+            report=report,
+        )
+        self.assertIn("Ikke anbefalte kandidater (1)", page)
+        self.assertIn("Ikke anbefalt som hovedhandel", page)
+        self.assertLess(
+            page.index("Anbefalte alternativer"),
+            page.index("Ikke anbefalte kandidater"),
+        )
 
     def test_target_that_does_not_cover_fees_blocks_trade(self) -> None:
         stock = make_stock(close=50.0, sma5=49.0, sma20=48.0, sma50=45.0)
@@ -435,6 +466,11 @@ class PremarketReportTests(unittest.TestCase):
 
 
 class ConfigTests(unittest.TestCase):
+    def test_default_score_weights_are_normalized(self) -> None:
+        settings = Settings()
+        self.assertAlmostEqual(settings.scoring.weights.total, 1.0)
+        self.assertAlmostEqual(settings.scoring.risk_weights.total, 1.0)
+
     def test_partial_json_overrides_weights(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "config.json"
@@ -450,7 +486,7 @@ class ConfigTests(unittest.TestCase):
             settings = load_settings(path)
             self.assertEqual(settings.scoring.weights.momentum, 0.30)
             self.assertEqual(settings.trade.capital, 10_000.0)
-            self.assertEqual(settings.scoring.weights.trend, 0.15)
+            self.assertEqual(settings.scoring.weights.trend, 0.14)
 
     def test_unknown_config_key_raises(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -458,6 +494,43 @@ class ConfigTests(unittest.TestCase):
             path.write_text('{"scoring": {"ukjent": 1}}', encoding="utf-8")
             with self.assertRaises(ValueError):
                 load_settings(path)
+
+    def test_invalid_spike_thresholds_raise(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "scoring": {
+                            "smooth_day_return": 0.05,
+                            "spike_day_return": 0.04,
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaises(ValueError):
+                load_settings(path)
+
+    def test_spike_thresholds_can_be_overridden(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "scoring": {
+                            "smooth_day_return": 0.015,
+                            "spike_day_return": 0.035,
+                            "strong_spike_day_return": 0.06,
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            settings = load_settings(path)
+            self.assertEqual(settings.scoring.smooth_day_return, 0.015)
+            self.assertEqual(settings.scoring.spike_day_return, 0.035)
+            self.assertEqual(settings.scoring.strong_spike_day_return, 0.06)
 
 
 class BacktestTests(unittest.TestCase):
@@ -469,6 +542,12 @@ class BacktestTests(unittest.TestCase):
         second = stock_as_of(changed, 10)
         self.assertEqual(first, second)
         self.assertEqual(first.close, bars[10].close)
+
+    def test_stock_as_of_sets_last_day_return(self) -> None:
+        bars = make_bars(20)
+        stock = stock_as_of(bars, 10)
+        expected = bars[10].close / bars[9].close - 1.0
+        self.assertAlmostEqual(stock.day_return or 0.0, expected)
 
     def test_ambiguous_day_uses_stop_conservatively(self) -> None:
         bar = Bar(
@@ -529,9 +608,7 @@ class BacktestTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 load_bars(path)
 
-    def test_web_backtest_shows_target_summaries_and_stop(self) -> None:
-        stock = make_stock()
-        result = screen([stock], Criteria())
+    def test_journal_page_shows_backtest_target_summaries_and_stop(self) -> None:
         backtest = {
             "from_date": "2026-01-01",
             "to_date": "2026-02-01",
@@ -542,18 +619,30 @@ class BacktestTests(unittest.TestCase):
             "warnings": [],
             "settings": {"trade": {"stop_loss_pct": 0.02}},
         }
-        page = render_dashboard(
-            result,
-            make_universe([stock]),
-            Criteria(),
-            backtest=backtest,
-        )
+        page = render_journal_page(None, backtest=backtest)
+        self.assertIn("Historisk test", page)
         self.assertIn("Treff per gevinstmål", page)
         self.assertIn("Mål 1%", page)
         self.assertIn("Mål 2%", page)
         self.assertIn("Mål 3%", page)
         self.assertIn("Mål 5%", page)
         self.assertIn("tapsgrense −2,0 %", page)
+
+    def test_journal_page_shows_saved_report_history(self) -> None:
+        history = [
+            {
+                "generated_at": "2026-10-29T08:15:00+00:00",
+                "ticker": "EQNR",
+                "name": "Equinor ASA",
+                "score": 81.0,
+                "risk_score": 34.0,
+                "categories": ["momentum"],
+            }
+        ]
+        page = render_journal_page(None, history=history)
+        self.assertIn("Tidligere morgenrapporter", page)
+        self.assertIn("EQNR", page)
+        self.assertIn("Equinor ASA", page)
 
 
 if __name__ == "__main__":

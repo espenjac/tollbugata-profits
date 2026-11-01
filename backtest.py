@@ -6,7 +6,7 @@ Eksempel:
         --from 2025-01-01 --to 2025-12-31 --output reports/backtest_latest.json
 
 CSV-filen må ha kolonnene date,ticker,open,high,low,close,volume. Valgfrie
-kolonner: name,sector,market_cap,spread_pct,market,news_sentiment,
+kolonner: name,sector,market_cap,market,news_sentiment,
 news_relevance,news_event. Testen er konservativ når både gevinstmål og
 tapsgrense blir truffet samme dag.
 """
@@ -14,6 +14,7 @@ tapsgrense blir truffet samme dag.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from datetime import date
 from pathlib import Path
@@ -55,11 +56,15 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PCT",
         help="kommaseparerte gevinstmål i prosent (standard: 1,2,3,5; 2 tas alltid med)",
     )
+    default_output = os.environ.get(
+        "TP_BACKTEST_OUTPUT",
+        str(Path(os.environ.get("TP_REPORTS_ROOT", "reports")) / "backtest_latest.json"),
+    )
     parser.add_argument(
         "--output",
-        default="reports/backtest_latest.json",
+        default=default_output,
         metavar="FIL",
-        help="skriv JSON-resultat til FIL (standard: reports/backtest_latest.json)",
+        help=f"skriv JSON-resultat til FIL (standard: {default_output})",
     )
     return parser
 

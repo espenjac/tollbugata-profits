@@ -75,6 +75,9 @@ def stock_to_dict(
         "is_growth": stock.is_growth,
         "at_high": at_high,
         "nordnet_url": nordnet_url(stock),
+        "day_return_pct": _round(
+            stock.day_return * 100 if stock.day_return is not None else None
+        ),
         "week_return_pct": _round(stock.week_return * 100 if stock.week_return is not None else None),
         "month_return_pct": _round(stock.month_return * 100 if stock.month_return is not None else None),
         "quarter_return_pct": _round(
@@ -298,6 +301,10 @@ def premarket_to_dict(
         "alternatives": [
             planned_candidate_to_dict(item, news=news)
             for item in report.alternatives
+        ],
+        "blocked": [
+            planned_candidate_to_dict(item, news=news)
+            for item in report.blocked
         ],
         "top_candidates": [
             candidate_to_dict(

@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: tollbugata-profits
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    healthCheckPath: /healthz
+    envVars:
+      - key: TP_PASSWORD
+        sync: false
+      - key: TP_SECRET
+        generateValue: true
+      - key: TP_JOURNAL
+        value: /app/storage/journal.json
+      - key: TP_REPORTS_ROOT
+        value: /app/storage/reports
+      - key: TP_SECURE_COOKIES
+        value: "1"
+    disk:
+      name: tollbugata-storage
+      mountPath: /app/storage
+      sizeGB: 1

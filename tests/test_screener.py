@@ -71,6 +71,7 @@ def make_payload(**overrides) -> dict:
             "description": "Test ASA",
             "close": 100.0,
             "currency": "NOK",
+            "change": 1.25,
             "Perf.W": 3.0,
             "Perf.1M": 8.0,
             "Perf.3M": 15.0,
@@ -397,6 +398,41 @@ class StrategyTests(unittest.TestCase):
     def test_excludes_overextended_week(self) -> None:
         self.assertFalse(is_candidate(make_stock(week_return=0.30)))
 
+    def test_smooth_week_ranks_above_one_day_spike(self) -> None:
+        smooth = make_stock(
+            ticker="SMOOTH",
+            week_return=0.06,
+            day_return=0.01,
+        )
+        spike = make_stock(
+            ticker="SPIKE",
+            week_return=0.06,
+            day_return=0.055,
+        )
+        ranked = rank_candidates([spike, smooth], limit=2)
+        self.assertEqual(
+            [candidate.stock.ticker for candidate in ranked],
+            ["SMOOTH", "SPIKE"],
+        )
+        smooth_candidate, spike_candidate = ranked
+        self.assertGreater(
+            smooth_candidate.opportunity_score,
+            spike_candidate.opportunity_score,
+        )
+        self.assertLess(smooth_candidate.risk_score, spike_candidate.risk_score)
+        self.assertIn("Jevn uke", smooth_candidate.reasons)
+        self.assertIn("momentum", smooth_candidate.categories)
+        self.assertNotIn("momentum", spike_candidate.categories)
+        self.assertTrue(
+            any("dagshopp" in warning.lower() for warning in spike_candidate.warnings)
+        )
+
+    def test_missing_day_return_is_neutral_and_not_warned(self) -> None:
+        candidate = rank_candidates([make_stock()])[0]
+        self.assertFalse(
+            any("dagshopp" in warning.lower() for warning in candidate.warnings)
+        )
+
     def test_liquidity_breaks_tie(self) -> None:
         liquid = make_stock(
             ticker="LIQ",
@@ -436,6 +472,7 @@ class ParsePayloadTests(unittest.TestCase):
         stock = stocks[0]
         self.assertEqual(stock.ticker, "TEST")
         self.assertEqual(stock.name, "Test ASA")
+        self.assertAlmostEqual(stock.day_return or 0, 0.0125)
         self.assertAlmostEqual(stock.week_return or 0, 0.03)
         self.assertAlmostEqual(stock.ath or 0, 120.0)
         self.assertEqual(stock.sector, "Industrials")
@@ -1075,6 +1112,10 @@ class EventFormattingTests(unittest.TestCase):
         self.assertEqual(data["average_turnover"], 100_000_000.0)
         self.assertEqual(data["atr_pct"], 2.5)
 
+    def test_stock_to_dict_has_day_return(self) -> None:
+        data = stock_to_dict(make_stock(day_return=0.012))
+        self.assertEqual(data["day_return_pct"], 1.2)
+
     def test_stock_to_dict_has_market(self) -> None:
         data = stock_to_dict(make_stock(market="euronext_growth"))
         self.assertEqual(data["market"], "euronext_growth")
@@ -1183,6 +1224,31 @@ class RenderTests(unittest.TestCase):
         self.assertIn("Kandidatene er et teknisk utgangspunkt", page)
         self.assertIn("pick-score", page)
         self.assertIn("Ikke et kjøpssignal", page)
+
+    def test_dashboard_alternatives_expand_to_full_detail(self) -> None:
+        from oslo_screener.data import Universe
+
+        stocks = [
+            make_stock(),
+            make_stock(ticker="DNB", name="DNB Bank ASA"),
+        ]
+        result = screen(stocks, Criteria())
+        universe = Universe(
+            stocks=stocks,
+            fetched_at=datetime(2026, 10, 29, 12, 0, tzinfo=timezone.utc),
+            source="live",
+        )
+        page = render_dashboard(result, universe, Criteria(), web_mode=True)
+        self.assertIn('class="pick pick-expandable"', page)
+        self.assertIn('<details class="pick-details">', page)
+        self.assertIn("Vis detaljer", page)
+        self.assertIn("Skjul detaljer", page)
+        self.assertIn("pick-detail-body", page)
+        self.assertGreaterEqual(page.count("Gevinst- og tapsscenarioer"), 2)
+        self.assertIn(
+            "Klikk på en kandidat for samme detaljer som hovedkandidaten.",
+            page,
+        )
 
     def test_terminal_has_top_candidates(self) -> None:
         result = screen(

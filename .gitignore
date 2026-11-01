@@ -5,3 +5,8 @@ __pycache__/
 oslo_screen.html
 rapport.html
 reports/
+data/
+.env
+storage/
+supabase/.temp/
+supabase/.branches/

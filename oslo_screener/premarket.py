@@ -8,6 +8,7 @@ genereringstidspunktet. Den anbefaler aldri å handle automatisk.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from datetime import date, datetime, time, timezone
 from pathlib import Path
@@ -28,7 +29,14 @@ try:
 except Exception:  # pragma: no cover - mangler tidssonedata
     _OSLO = timezone.utc
 
-DEFAULT_REPORT_DIR = Path(__file__).resolve().parent.parent / "reports" / "premarket"
+DEFAULT_REPORTS_ROOT = Path(
+    os.environ.get(
+        "TP_REPORTS_ROOT",
+        str(Path(__file__).resolve().parent.parent / "reports"),
+    )
+).expanduser()
+DEFAULT_REPORT_DIR = DEFAULT_REPORTS_ROOT / "premarket"
+DEFAULT_BACKTEST_PATH = DEFAULT_REPORTS_ROOT / "backtest_latest.json"
 
 
 @dataclass(frozen=True)
@@ -70,6 +78,7 @@ class PremarketReport:
     ranked: tuple[PlannedCandidate, ...]
     main: Optional[PlannedCandidate]
     alternatives: tuple[PlannedCandidate, ...]
+    blocked: tuple[PlannedCandidate, ...]
     no_trade_reason: Optional[str]
     news_since: Optional[datetime]
     news_source: Optional[str]
@@ -178,10 +187,17 @@ def build_premarket_report(
             )
         )
 
-    main = next((item for item in planned if item.recommendable), None)
-    alternatives = tuple(item for item in planned if item is not main)
-    alternatives = alternatives[: cfg.report.max_alternatives]
-    selected = ((main,) if main is not None else ()) + alternatives
+    recommendable = [item for item in planned if item.recommendable]
+    blocked = [item for item in planned if not item.recommendable]
+    main = recommendable[0] if recommendable else None
+    # Blokkerte kandidater skal aldri fremstå som et anbefalt alternativ. De
+    # vises i en egen seksjon, også når de har høyere totalscore enn
+    # hovedkandidaten.
+    alternatives = tuple(
+        item for item in recommendable if item is not main
+    )[: cfg.report.max_alternatives]
+    blocked = tuple(blocked[: cfg.report.max_alternatives])
+    selected = ((main,) if main is not None else ()) + alternatives + blocked
 
     no_trade_reason: Optional[str] = None
     if main is None:
@@ -248,6 +264,7 @@ def build_premarket_report(
         ranked=tuple(selected),
         main=main,
         alternatives=alternatives,
+        blocked=blocked,
         no_trade_reason=no_trade_reason,
         news_since=news.since if news is not None else None,
         news_source=news.source if news is not None else None,
@@ -373,9 +390,7 @@ def load_latest_report(
 
 
 def load_latest_backtest(
-    path: Path | str = Path(__file__).resolve().parent.parent
-    / "reports"
-    / "backtest_latest.json",
+    path: Path | str = DEFAULT_BACKTEST_PATH,
 ) -> Optional[dict]:
     file_path = Path(path)
     try:

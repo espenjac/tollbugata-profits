@@ -45,7 +45,6 @@ class Bar:
     name: str = ""
     sector: str = "Ukjent"
     market_cap: Optional[float] = None
-    spread_pct: Optional[float] = None
     market: str = "oslo"
     news_sentiment: str = "neutral"
     news_relevance: str = "low"
@@ -137,7 +136,7 @@ def load_bars(path: str | Path) -> list[Bar]:
     """Les daglige OHLCV-data fra CSV.
 
     Påkrevde kolonner: date, ticker, open, high, low, close, volume.
-    Valgfrie: name, sector, market_cap, spread_pct, market, news_sentiment,
+    Valgfrie: name, sector, market_cap, market, news_sentiment,
     news_relevance, news_event.
     """
     bars: list[Bar] = []
@@ -178,7 +177,6 @@ def load_bars(path: str | Path) -> list[Bar]:
                     name=str(row.get("name") or ticker).strip(),
                     sector=str(row.get("sector") or "Ukjent").strip(),
                     market_cap=_float_or_none(row.get("market_cap")),
-                    spread_pct=_float_or_none(row.get("spread_pct")),
                     market=str(row.get("market") or "oslo").strip(),
                     news_sentiment=str(row.get("news_sentiment") or "neutral").strip(),
                     news_relevance=str(row.get("news_relevance") or "low").strip(),
@@ -262,6 +260,7 @@ def stock_as_of(bars: list[Bar], index: int) -> Stock:
         name=previous.name or previous.ticker,
         close=previous.close,
         currency="NOK",
+        day_return=_return(closes, 1),
         week_return=_return(closes, 5),
         month_return=_return(closes, 21),
         quarter_return=_return(closes, 63),
@@ -277,7 +276,6 @@ def stock_as_of(bars: list[Bar], index: int) -> Stock:
         market=previous.market,
         average_volume_10d=average_volume,
         atr=_atr(history),
-        spread_pct=previous.spread_pct,
     )
 
 

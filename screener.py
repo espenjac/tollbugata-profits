@@ -25,12 +25,16 @@ from oslo_screener.cli import (
     settings_from_args,
 )
 from oslo_screener.data import DataSourceError, fetch_universe
+from oslo_screener.journal import (
+    DEFAULT_JOURNAL_PATH,
+    JournalError,
+    load_journal,
+    with_available_cash,
+)
 from oslo_screener.logic import is_at_high, screen, sort_stocks
 from oslo_screener.news import fetch_news
 from oslo_screener.premarket import (
     build_premarket_report,
-    load_latest_backtest,
-    load_report_history,
     save_report,
 )
 from oslo_screener.render import render_dashboard, render_terminal
@@ -49,6 +53,7 @@ CSV_FIELDS = [
     "is_growth",
     "at_high",
     "nordnet_url",
+    "day_return_pct",
     "week_return_pct",
     "month_return_pct",
     "quarter_return_pct",
@@ -123,6 +128,15 @@ def _csv_text(stocks, criteria, news=None, report=None) -> str:
 def run_once(args: argparse.Namespace, force: bool = False, save: bool = True) -> int:
     criteria = criteria_from_args(args)
     settings = settings_from_args(args)
+    if not getattr(args, "ignore_journal", False) and getattr(args, "capital", None) is None:
+        try:
+            journal = load_journal(
+                getattr(args, "journal", DEFAULT_JOURNAL_PATH),
+                default_cash=settings.trade.capital,
+            )
+            settings = with_available_cash(settings, journal.available_cash)
+        except JournalError as exc:
+            print(f"Advarsel: handelsdagboken ble ikke brukt: {exc}", file=sys.stderr)
     universe = fetch_universe(
         cache_ttl=args.cache_ttl,
         force=force,
@@ -181,8 +195,6 @@ def run_once(args: argparse.Namespace, force: bool = False, save: bool = True) -
             web_mode=False,
             news=news,
             report=report,
-            backtest=load_latest_backtest(),
-            history=load_report_history(),
         )
         _write_text(args.html, page)
 
@@ -270,6 +282,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.0,
         metavar="SEK",
         help="kjør på nytt hvert N-te sekund (0 = én gang)",
+    )
+    journal = parser.add_argument_group("handelsdagbok")
+    journal.add_argument(
+        "--journal",
+        default=str(DEFAULT_JOURNAL_PATH),
+        metavar="FIL",
+        help=f"lokal JSON-dagbok med ledig kapital (standard: {DEFAULT_JOURNAL_PATH})",
+    )
+    journal.add_argument(
+        "--ignore-journal",
+        action="store_true",
+        help="bruk --capital/config selv om handelsdagboken finnes",
     )
     return parser
 
