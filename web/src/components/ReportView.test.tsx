@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "../core/config";
 import { parseScannerPayload } from "../core/market";
@@ -83,5 +83,28 @@ describe("dashboard components", () => {
     expect(container.querySelectorAll('a[href*="nordnet.no"]').length).toBeGreaterThan(
       0,
     );
+  });
+
+  it("renders mobile stock cards in batches", () => {
+    const { result } = makeReport();
+    const { container } = render(
+      <StockTable
+        stocks={result.matches}
+        criteria={DEFAULT_CRITERIA}
+        today="2026-11-01"
+      />,
+    );
+    const cards = () => container.querySelectorAll(".stock-card");
+    const firstBatch = Math.min(20, result.matches.length);
+    expect(cards()).toHaveLength(firstBatch);
+
+    if (result.matches.length > firstBatch) {
+      fireEvent.click(
+        container.querySelector<HTMLButtonElement>(".stock-show-more")!,
+      );
+      expect(cards()).toHaveLength(
+        Math.min(firstBatch + 20, result.matches.length),
+      );
+    }
   });
 });

@@ -497,8 +497,8 @@ function CandidateDetails({
 
 function ScenarioTable({ trade }: { trade: TradePlan }) {
   return (
-    <div className="table-wrap">
-      <table className="mini-table">
+    <div className="table-wrap stack-wrap">
+      <table className="mini-table stack-table">
         <thead>
           <tr>
             <th>Endring</th>
@@ -511,10 +511,17 @@ function ScenarioTable({ trade }: { trade: TradePlan }) {
         <tbody>
           {trade.scenarios.map((scenario) => (
             <tr key={scenario.changePct}>
-              <td>{formatPct(scenario.changePct)}</td>
-              <td>{formatPrice(scenario.exitPrice)} kr</td>
-              <td>{formatMoney(scenario.grossProfit, 0, true)}</td>
+              <td data-label="Endring">
+                {formatPct(scenario.changePct)}
+              </td>
+              <td data-label="Salgskurs">
+                {formatPrice(scenario.exitPrice)} kr
+              </td>
+              <td data-label="Brutto">
+                {formatMoney(scenario.grossProfit, 0, true)}
+              </td>
               <td
+                data-label="Netto"
                 className={
                   scenario.netProfit > 0
                     ? "positive"
@@ -525,7 +532,9 @@ function ScenarioTable({ trade }: { trade: TradePlan }) {
               >
                 {formatMoney(scenario.netProfit, 0, true)}
               </td>
-              <td>{formatPct(scenario.netReturnPct / 100)}</td>
+              <td data-label="Netto avkastning">
+                {formatPct(scenario.netReturnPct / 100)}
+              </td>
             </tr>
           ))}
         </tbody>

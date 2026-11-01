@@ -525,8 +525,8 @@ export function JournalPage() {
         {summary.holdings.length === 0 ? (
           <p className="muted">Ingen åpne posisjoner i dagboken.</p>
         ) : (
-          <div className="table-wrap">
-            <table className="mini-table">
+          <div className="table-wrap stack-wrap">
+            <table className="mini-table stack-table">
               <thead>
                 <tr>
                   <th>Ticker</th>
@@ -539,15 +539,19 @@ export function JournalPage() {
               <tbody>
                 {summary.holdings.map((holding) => (
                   <tr key={holding.ticker}>
-                    <td>{holding.ticker}</td>
-                    <td className="num">{formatNumber(holding.quantity)}</td>
-                    <td className="num">
+                    <td data-label="Ticker">{holding.ticker}</td>
+                    <td data-label="Antall" className="num">
+                      {formatNumber(holding.quantity)}
+                    </td>
+                    <td data-label="Snittkost" className="num">
                       {holding.averageCost === null
                         ? "–"
                         : `${formatPrice(holding.averageCost)} kr`}
                     </td>
-                    <td className="num">{formatMoney(holding.costBasis, 2)}</td>
-                    <td className="num">
+                    <td data-label="Kostbasis" className="num">
+                      {formatMoney(holding.costBasis, 2)}
+                    </td>
+                    <td data-label="" className="num">
                       <button
                         className="btn btn-small"
                         type="button"
@@ -574,8 +578,8 @@ export function JournalPage() {
         {trades.length === 0 ? (
           <p className="muted">Ingen handler er loggført ennå.</p>
         ) : (
-          <div className="table-wrap">
-            <table className="stock-table journal-table">
+          <div className="table-wrap stack-wrap">
+            <table className="stock-table journal-table stack-table">
               <thead>
                 <tr>
                   <th>Utført</th>
@@ -594,23 +598,38 @@ export function JournalPage() {
                   const change = tradeCashChange(trade);
                   return (
                     <tr key={trade.id}>
-                      <td>{formatDateTime(new Date(trade.executedAt))}</td>
-                      <td>
+                      <td data-label="Utført">
+                        {formatDateTime(new Date(trade.executedAt))}
+                      </td>
+                      <td data-label="Side">
                         <span
                           className={`side-badge side-${trade.side}`}
                         >
                           {tradeSideLabel(trade)}
                         </span>
                       </td>
-                      <td className="ticker">{trade.ticker}</td>
-                      <td className="num">{formatNumber(trade.quantity)}</td>
-                      <td className="num">{formatPrice(trade.price)}</td>
-                      <td className="num">{formatMoney(trade.fee, 2)}</td>
-                      <td className={`num ${changeClass(change)}`}>
+                      <td data-label="Ticker" className="ticker">
+                        {trade.ticker}
+                      </td>
+                      <td data-label="Antall" className="num">
+                        {formatNumber(trade.quantity)}
+                      </td>
+                      <td data-label="Kurs" className="num">
+                        {formatPrice(trade.price)}
+                      </td>
+                      <td data-label="Kurtasje" className="num">
+                        {formatMoney(trade.fee, 2)}
+                      </td>
+                      <td
+                        data-label="Kontantstrøm"
+                        className={`num ${changeClass(change)}`}
+                      >
                         {formatMoney(change, 2, true)}
                       </td>
-                      <td className="note-cell">{trade.note || "–"}</td>
-                      <td className="num">
+                      <td data-label="Notat" className="note-cell">
+                        {trade.note || "–"}
+                      </td>
+                      <td data-label="" className="num">
                         <button
                           className="btn btn-small"
                           type="button"
@@ -631,8 +650,8 @@ export function JournalPage() {
       {adjustments.length > 0 ? (
         <details className="panel exclusions">
           <summary>Saldojusteringer ({adjustments.length})</summary>
-          <div className="table-wrap">
-            <table className="mini-table">
+          <div className="table-wrap stack-wrap">
+            <table className="mini-table stack-table">
               <thead>
                 <tr>
                   <th>Tid</th>
@@ -643,11 +662,16 @@ export function JournalPage() {
               <tbody>
                 {adjustments.map((adjustment) => (
                   <tr key={adjustment.id}>
-                    <td>{formatDateTime(new Date(adjustment.changedAt))}</td>
-                    <td className={`num ${changeClass(adjustment.amount)}`}>
+                    <td data-label="Tid">
+                      {formatDateTime(new Date(adjustment.changedAt))}
+                    </td>
+                    <td
+                      data-label="Endring"
+                      className={`num ${changeClass(adjustment.amount)}`}
+                    >
                       {formatMoney(adjustment.amount, 2, true)}
                     </td>
-                    <td>{adjustment.note || "–"}</td>
+                    <td data-label="Notat">{adjustment.note || "–"}</td>
                   </tr>
                 ))}
               </tbody>
