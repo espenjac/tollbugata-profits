@@ -64,7 +64,9 @@ supabase functions deploy market-snapshot
 
 `SUPABASE_URL` og `SUPABASE_SERVICE_ROLE_KEY` settes automatisk av Supabase.
 `OWNER_EMAIL` er valgfri, men anbefalt: uten den kan alle autentiserte brukere
-kalle funksjonen.
+kalle funksjonen. Kontoer som ikke matcher får 403, og appen viser «Denne
+kontoen har ikke tilgang. Logg inn med eierkontoen.» Dette er forventet. Slett
+eventuelle testkontoer under **Authentication → Users**.
 
 Funksjonen cacher TradingView i 10 minutter, NewsWeb i 5 minutter og
 Euronext Growth i 24 timer. Ved feil brukes gammel cache med advarsel når den

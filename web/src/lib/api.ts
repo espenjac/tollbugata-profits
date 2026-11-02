@@ -1,3 +1,8 @@
+import {
+  FunctionsFetchError,
+  FunctionsHttpError,
+  FunctionsRelayError,
+} from "@supabase/supabase-js";
 import { osloDateString } from "../core/dates";
 import { mergeSettings, type Settings } from "../core/config";
 import {
@@ -64,6 +69,45 @@ function newsSourceValue(
   return "live";
 }
 
+export async function edgeFunctionErrorMessage(
+  error: unknown,
+): Promise<string> {
+  if (error instanceof FunctionsHttpError) {
+    const status = error.context.status;
+    if (status === 401) {
+      return "Innloggingen er utløpt. Logg inn på nytt.";
+    }
+    if (status === 403) {
+      return "Denne kontoen har ikke tilgang. Logg inn med eierkontoen.";
+    }
+    try {
+      const body = (await error.context.clone().json()) as {
+        error?: unknown;
+        message?: unknown;
+      };
+      if (typeof body.error === "string" && body.error.trim()) {
+        return body.error;
+      }
+      if (typeof body.message === "string" && body.message.trim()) {
+        return body.message;
+      }
+    } catch {
+      // The error body was not JSON; fall back to the generic Functions error.
+    }
+    return error.message;
+  }
+  if (error instanceof FunctionsRelayError) {
+    return "Supabase fikk ikke kontakt med markedsfunksjonen. Prøv igjen om litt.";
+  }
+  if (error instanceof FunctionsFetchError) {
+    return "Kunne ikke kontakte Supabase. Sjekk nettverket og prøv igjen.";
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+
 export async function fetchMarketSnapshot(): Promise<MarketSnapshot> {
   const client = requireSupabase();
   const { data, error } = await client.functions.invoke<RawSnapshot>(
@@ -71,10 +115,7 @@ export async function fetchMarketSnapshot(): Promise<MarketSnapshot> {
     { method: "POST", body: {} },
   );
   if (error) {
-    throw new Error(
-      error.message ||
-        "Kunne ikke hente markedsdata. Sjekk at Edge Function er deployet.",
-    );
+    throw new Error(await edgeFunctionErrorMessage(error));
   }
   if (!data || data.error) {
     throw new Error(data?.error ?? "Markedsfunksjonen svarte uten data.");
