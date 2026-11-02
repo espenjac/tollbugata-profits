@@ -4,9 +4,10 @@
 // Deploy with:
 //   supabase functions deploy market-snapshot
 //
-// Required function secrets (optional but recommended):
-//   OWNER_EMAIL=you@example.com
+// Optional function secrets (recommended):
+//   ALLOWED_EMAILS=you@example.com,partner@example.com
 //
+// OWNER_EMAIL is still supported as a single-address fallback.
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected by Supabase.
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
@@ -458,9 +459,19 @@ serve(async (request) => {
     if (error || !data.user) {
       return json({ error: "Invalid session" }, 401);
     }
-    const ownerEmail = Deno.env.get("OWNER_EMAIL")?.trim().toLowerCase();
+    const allowedEmails = [
+      Deno.env.get("ALLOWED_EMAILS") ?? "",
+      Deno.env.get("OWNER_EMAIL") ?? "",
+    ]
+      .join(",")
+      .split(",")
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean);
     const userEmail = data.user.email?.trim().toLowerCase();
-    if (ownerEmail && userEmail !== ownerEmail) {
+    if (
+      allowedEmails.length > 0 &&
+      (!userEmail || !allowedEmails.includes(userEmail))
+    ) {
       return json({ error: "This account is not allowed" }, 403);
     }
 

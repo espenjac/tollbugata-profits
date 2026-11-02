@@ -78,7 +78,7 @@ export async function edgeFunctionErrorMessage(
       return "Innloggingen er utløpt. Logg inn på nytt.";
     }
     if (status === 403) {
-      return "Denne kontoen har ikke tilgang. Logg inn med eierkontoen.";
+      return "Denne kontoen har ikke tilgang. Kontakt eieren for å bli lagt til.";
     }
     try {
       const body = (await error.context.clone().json()) as {

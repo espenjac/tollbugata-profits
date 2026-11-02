@@ -71,8 +71,8 @@ export function LoginPage() {
           </InlineNotice>
         ) : null}
         <p className="auth-footnote">
-          Appen er for én bruker. Nye kontoer bør deaktiveres i Supabase etter
-          at eieren har logget inn første gang.
+          Appen er for inviterte brukere. Ta kontakt med eieren hvis du mangler
+          tilgang.
         </p>
         <p className="disclaimer">
           Appen sender aldri ordrer. Den er et beslutningsstøtteverktøy, ikke

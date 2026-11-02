@@ -50,23 +50,27 @@ trigger som oppretter profil, konto og innstillinger for nye brukere.
                   https://<github-bruker>.github.io/tollbugata-profits/**
    ```
 
-5. Logg inn én gang med eierens Google-konto.
+5. Logg inn med eierens Google-konto. Hvis flere skal bruke appen, la dem logge
+   inn én gang mens registrering er tillatt.
 6. Slå deretter av **Allow new users to sign up** i Supabase. Da kan bare
-   eksisterende brukere logge inn. RLS hindrer uansett andre brukere fra å lese
-   eierens rader.
+   eksisterende brukere logge inn. Hver bruker får egne rapporter, handler og
+   innstillinger; RLS hindrer brukere fra å lese hverandres rader. For å legge
+   til en ny bruker senere, slå midlertidig på registrering, la brukeren logge
+   inn, og slå den av igjen.
 
 ## 4. Deploy Edge Function
 
 ```bash
-supabase secrets set OWNER_EMAIL=<eierens-google-epost>
+supabase secrets set ALLOWED_EMAILS=<eierens-google-epost>,<annen-bruker>
 supabase functions deploy market-snapshot
 ```
 
 `SUPABASE_URL` og `SUPABASE_SERVICE_ROLE_KEY` settes automatisk av Supabase.
-`OWNER_EMAIL` er valgfri, men anbefalt: uten den kan alle autentiserte brukere
-kalle funksjonen. Kontoer som ikke matcher får 403, og appen viser «Denne
-kontoen har ikke tilgang. Logg inn med eierkontoen.» Dette er forventet. Slett
-eventuelle testkontoer under **Authentication → Users**.
+`ALLOWED_EMAILS` er en kommaseparert liste over kontoer som får bruke
+markedsfunksjonen. `OWNER_EMAIL` støttes fortsatt som fallback for én adresse.
+Uten noen av dem kan alle autentiserte brukere kalle funksjonen. Kontoer som
+ikke står i listen får 403, og appen viser «Denne kontoen har ikke tilgang.
+Kontakt eieren for å bli lagt til.»
 
 Funksjonen cacher TradingView i 10 minutter, NewsWeb i 5 minutter og
 Euronext Growth i 24 timer. Ved feil brukes gammel cache med advarsel når den
@@ -125,6 +129,7 @@ rapporten for en dato vinner.
 
 ## Gratisnivå
 
-Supabase free tier holder for én bruker: 500 MB database, 5 GB egress og 500 000
-Edge Function-kall per måned. Prosjektet kan pauses etter sju dagers inaktivitet
-og har ikke automatisk backup. Eksporter data utenfor appen ved behov.
+Supabase free tier holder for noen få brukere: 500 MB database, 5 GB egress og
+500 000 Edge Function-kall per måned. Prosjektet kan pauses etter sju dagers
+inaktivitet og har ikke automatisk backup. Eksporter data utenfor appen ved
+behov.

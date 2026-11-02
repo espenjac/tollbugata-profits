@@ -21,7 +21,7 @@ describe("edgeFunctionErrorMessage", () => {
     const error = httpError(403, { error: "This account is not allowed" });
 
     await expect(edgeFunctionErrorMessage(error)).resolves.toBe(
-      "Denne kontoen har ikke tilgang. Logg inn med eierkontoen.",
+      "Denne kontoen har ikke tilgang. Kontakt eieren for å bli lagt til.",
     );
   });
 

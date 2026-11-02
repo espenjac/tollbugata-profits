@@ -1,8 +1,8 @@
 -- Tollbugata Profits v2 schema. Run this in the Supabase SQL editor or with
 -- `supabase db push`.
 --
--- The app is single-user: Google sign-in is restricted to the owner, and every
--- table is protected by row-level security scoped to auth.uid().
+-- The app supports a closed set of invited Google users. Every table is
+-- protected by row-level security scoped to auth.uid().
 
 create extension if not exists pgcrypto;
 

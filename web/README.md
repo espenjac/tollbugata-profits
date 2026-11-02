@@ -58,7 +58,7 @@ alle tre oppdateres, sammen med Supabase redirect-URL-er og GitHub Pages-URL.
 - RLS på alle brukertabeller, begrenset til `auth.uid()`.
 - `market_cache` er bare tilgjengelig for service role.
 - `market-snapshot` validerer JWT, og kan i tillegg begrenses med
-  `OWNER_EMAIL`.
+  `ALLOWED_EMAILS`.
 - `service_role` skal aldri inn i frontend, GitHub eller `.env.local`.
 
 Se `../supabase/README.md` for oppsett av database, Google OAuth, Edge Function

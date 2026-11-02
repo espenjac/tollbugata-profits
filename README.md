@@ -13,7 +13,7 @@ investeringsrådgivning.
 Aktiv app er en statisk React-PWA:
 
 - **React 19 + Vite + TypeScript** i `web/`.
-- **Supabase Auth med Google** for én eierkonto.
+- **Supabase Auth med Google** for eier og inviterte brukere.
 - **Supabase Postgres** med RLS for konto, handler, saldojusteringer,
   rapporter og innstillinger.
 - **Én Edge Function**, `market-snapshot`, henter TradingView, Euronext Growth
@@ -109,7 +109,7 @@ og filbaserte rapporter fjernes. `screener.py`, `backtest.py` og
 - RLS på alle brukertabeller, begrenset til `auth.uid()`.
 - `service_role` skal aldri inn i frontend, GitHub secrets eller committed
   miljøfiler.
-- `market-snapshot` validerer JWT og kan begrenses med `OWNER_EMAIL`.
-- Etter første innlogging bør Supabase sine nye registreringer slås av.
+- `market-snapshot` validerer JWT og kan begrenses med `ALLOWED_EMAILS`.
+- Nye registreringer bør slås av når de inviterte brukerne har logget inn.
 - Repositoryet kan gjøres offentlig, men sjekk git-historikk for hemmeligheter
   og brukerdata først.
