@@ -37,6 +37,9 @@ Oppsett:
 - «Ingen anbefalte kandidater i dag – vurder å stå over» når ingen er gode nok.
 - Nyhetsliste fra NewsWeb med enkel positiv/negativ/nøytral-analyse.
 - Handelsplan med hele aksjer, kurtasje, mål, stop, reward/risk og scenarier.
+- Egen åpningsplan som henter åpningskurs og VWAP etter børsåpning, regner
+  stop og gevinstmål på nytt fra faktisk åpning og viser om gammel plan ble
+  ugyldig etter et gap. Bruk den tidligst 09:15, helst 09:30.
 - Dagens rapport lagres første gang appen åpnes. Rapporten er uforanderlig og
   brukes som historikk senere samme dag.
 - Filtre påvirker aksjetabellen og nyhetslisten, men endrer ikke en allerede

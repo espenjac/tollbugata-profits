@@ -368,9 +368,9 @@ function CandidateDetails({
 
       <div className="report-grid trade-grid">
         <div>
-          <span>Siste sluttkurs</span>
+          <span>Rapportens entry</span>
           <strong>{formatPrice(stock.close)} kr</strong>
-          <small>estimat for neste åpning</small>
+          <small>gårsdagens sluttkurs – se åpningsplanen</small>
         </div>
         <div>
           <span>Antall aksjer</span>

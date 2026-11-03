@@ -12,6 +12,7 @@ import { todayDate } from "../lib/api";
 import { useDashboard } from "../lib/useDashboard";
 import { Filters } from "../components/Filters";
 import { NewsSection } from "../components/NewsSection";
+import { OpeningPlanView } from "../components/OpeningPlanView";
 import { ReportHistory } from "../components/ReportHistory";
 import { ReportView } from "../components/ReportView";
 import { StockTable } from "../components/StockTable";
@@ -50,6 +51,9 @@ export function DashboardPage() {
   const dashboard = useDashboard(userId);
   const {
     snapshot,
+    openingSnapshot,
+    openingRefreshing,
+    openingError,
     report,
     viewedReport,
     history,
@@ -62,6 +66,7 @@ export function DashboardPage() {
     screenResult,
     setCriteria,
     refresh,
+    refreshOpening,
     viewReport,
     clearViewedReport,
   } = dashboard;
@@ -137,6 +142,16 @@ export function DashboardPage() {
       ) : null}
       {notice ? (
         <InlineNotice kind="success">{notice}</InlineNotice>
+      ) : null}
+
+      {activeReport && !viewingHistorical ? (
+        <OpeningPlanView
+          report={activeReport}
+          snapshot={openingSnapshot ?? snapshot}
+          refreshing={openingRefreshing}
+          error={openingError}
+          onRefresh={() => void refreshOpening()}
+        />
       ) : null}
 
       <section className="stats-grid" aria-label="Nøkkeltall">

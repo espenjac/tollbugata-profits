@@ -6,6 +6,7 @@ import { DEFAULT_CRITERIA, screen, type Criteria } from "../core/screen";
 import type { PremarketReport } from "../core/types";
 import {
   fetchMarketSnapshot,
+  fetchOpeningSnapshot,
   loadReportByDate,
   loadReportById,
   loadReportHistory,
@@ -20,6 +21,9 @@ import type { JournalState } from "../core/journal";
 
 interface DashboardState {
   snapshot: MarketSnapshot | null;
+  openingSnapshot: MarketSnapshot | null;
+  openingRefreshing: boolean;
+  openingError: string | null;
   report: PremarketReport | null;
   viewedReport: PremarketReport | null;
   history: ReportHistoryItem[];
@@ -34,12 +38,17 @@ interface DashboardState {
   screenResult: ReturnType<typeof screen> | null;
   setCriteria: (criteria: Criteria) => void;
   refresh: () => Promise<void>;
+  refreshOpening: () => Promise<void>;
   viewReport: (reportId: string) => Promise<void>;
   clearViewedReport: () => void;
 }
 
 export function useDashboard(userId: string): DashboardState {
   const [snapshot, setSnapshot] = useState<MarketSnapshot | null>(null);
+  const [openingSnapshot, setOpeningSnapshot] =
+    useState<MarketSnapshot | null>(null);
+  const [openingRefreshing, setOpeningRefreshing] = useState(false);
+  const [openingError, setOpeningError] = useState<string | null>(null);
   const [report, setReport] = useState<PremarketReport | null>(null);
   const [viewedReport, setViewedReport] = useState<PremarketReport | null>(null);
   const [history, setHistory] = useState<ReportHistoryItem[]>([]);
@@ -68,6 +77,7 @@ export function useDashboard(userId: string): DashboardState {
       setError(null);
       setWarning(null);
       setNotice(null);
+      setOpeningError(null);
 
       const date = todayDate();
       const now = new Date();
@@ -89,6 +99,7 @@ export function useDashboard(userId: string): DashboardState {
         try {
           freshSnapshot = await fetchMarketSnapshot();
           setSnapshot(freshSnapshot);
+          setOpeningSnapshot(freshSnapshot);
         } catch (snapshotError) {
           snapshotWarning =
             snapshotError instanceof Error
@@ -173,6 +184,23 @@ export function useDashboard(userId: string): DashboardState {
     await load(true);
   }, [load]);
 
+  const refreshOpening = useCallback(async () => {
+    setOpeningRefreshing(true);
+    setOpeningError(null);
+    try {
+      const fresh = await fetchOpeningSnapshot();
+      setOpeningSnapshot(fresh);
+    } catch (refreshError) {
+      setOpeningError(
+        refreshError instanceof Error
+          ? refreshError.message
+          : String(refreshError),
+      );
+    } finally {
+      setOpeningRefreshing(false);
+    }
+  }, []);
+
   const viewReport = useCallback(
     async (reportId: string) => {
       try {
@@ -206,6 +234,9 @@ export function useDashboard(userId: string): DashboardState {
 
   return {
     snapshot,
+    openingSnapshot,
+    openingRefreshing,
+    openingError,
     report,
     viewedReport,
     history,
@@ -220,6 +251,7 @@ export function useDashboard(userId: string): DashboardState {
     screenResult,
     setCriteria,
     refresh,
+    refreshOpening,
     viewReport,
     clearViewedReport,
   };

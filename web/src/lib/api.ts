@@ -108,11 +108,16 @@ export async function edgeFunctionErrorMessage(
   return String(error);
 }
 
-export async function fetchMarketSnapshot(): Promise<MarketSnapshot> {
+export async function fetchMarketSnapshot(
+  mode: "default" | "opening" = "default",
+): Promise<MarketSnapshot> {
   const client = requireSupabase();
   const { data, error } = await client.functions.invoke<RawSnapshot>(
     "market-snapshot",
-    { method: "POST", body: {} },
+    {
+      method: "POST",
+      body: mode === "opening" ? { mode: "opening" } : {},
+    },
   );
   if (error) {
     throw new Error(await edgeFunctionErrorMessage(error));
@@ -175,6 +180,10 @@ export async function fetchMarketSnapshot(): Promise<MarketSnapshot> {
     news,
     generatedAt: data.generatedAt ? new Date(data.generatedAt) : new Date(),
   };
+}
+
+export function fetchOpeningSnapshot(): Promise<MarketSnapshot> {
+  return fetchMarketSnapshot("opening");
 }
 
 function payloadForReport(report: PremarketReport): Record<string, unknown> {

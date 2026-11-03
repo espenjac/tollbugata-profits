@@ -27,6 +27,14 @@ export interface Stock {
   averageVolume10d: number | null;
   atr: number | null;
   dayReturn: number | null;
+  /** Today's opening price from the live scanner, when available. */
+  open: number | null;
+  /** Today's high from the live scanner, when available. */
+  high: number | null;
+  /** Today's low from the live scanner, when available. */
+  low: number | null;
+  /** Current session VWAP from the live scanner, when available. */
+  vwap: number | null;
 }
 
 export function isGrowth(stock: Stock): boolean {

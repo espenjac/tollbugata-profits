@@ -31,6 +31,10 @@ export const SCANNER_COLUMNS = [
   "earnings_release_next_date",
   "dividend_ex_date_upcoming",
   "ATR",
+  "open",
+  "high",
+  "low",
+  "VWAP",
 ] as const;
 
 export class MarketDataError extends Error {
@@ -154,6 +158,10 @@ export function parseScannerPayload(
       exDividendDate: dateValue(values.get("dividend_ex_date_upcoming")),
       averageVolume10d: numberValue(values.get("average_volume_10d_calc")),
       atr: numberValue(values.get("ATR")),
+      open: numberValue(values.get("open")),
+      high: numberValue(values.get("high")),
+      low: numberValue(values.get("low")),
+      vwap: numberValue(values.get("VWAP")),
     });
   }
 

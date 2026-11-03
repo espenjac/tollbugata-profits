@@ -5,6 +5,7 @@ export * from "./journal";
 export * from "./market";
 export * from "./news";
 export * from "./nordnet";
+export * from "./opening";
 export * from "./premarket";
 export * from "./screen";
 export * from "./strategy";

@@ -19,6 +19,7 @@ const GROWTH_URL =
 const NEWS_URL = "https://api3.oslo.oslobors.no/v1/newsreader/list";
 
 const SCAN_TTL_SECONDS = 600;
+const OPENING_SCAN_TTL_SECONDS = 60;
 const NEWS_TTL_SECONDS = 300;
 const GROWTH_TTL_SECONDS = 24 * 60 * 60;
 
@@ -50,6 +51,10 @@ const SCAN_COLUMNS = [
   "earnings_release_next_date",
   "dividend_ex_date_upcoming",
   "ATR",
+  "open",
+  "high",
+  "low",
+  "VWAP",
 ];
 
 const USER_AGENT =
@@ -245,8 +250,12 @@ function osloOffsetMinutes(date: Date): number {
   return (asUtc - date.getTime()) / 60_000;
 }
 
-async function getScan() {
-  const cached = await readCache("scan");
+async function getScan(
+  cacheKey: string,
+  ttlSeconds: number,
+) {
+  const cached = await readCache(cacheKey);
+  const fallback = cacheKey === "scan-opening" ? await readCache("scan") : null;
   if (isFresh(cached)) {
     return {
       payload: cached?.payload,
@@ -275,7 +284,7 @@ async function getScan() {
     if (!Array.isArray(payload.data)) {
       throw new Error("TradingView response is missing data[]");
     }
-    await writeCache("scan", payload, SCAN_TTL_SECONDS);
+    await writeCache(cacheKey, payload, ttlSeconds);
     return {
       payload,
       fetchedAt: new Date().toISOString(),
@@ -283,14 +292,15 @@ async function getScan() {
       warning: null,
     };
   } catch (error) {
-    if (cached) {
+    const stale = cached ?? fallback;
+    if (stale) {
       return {
-        payload: cached.payload,
-        fetchedAt: cached.fetched_at,
+        payload: stale.payload,
+        fetchedAt: stale.fetched_at,
         source: "stale-cache",
         warning:
           `Ferske data kunne ikke hentes (${errorMessage(error)}). ` +
-          `Viser cache fra ${cached.fetched_at}.`,
+          `Viser cache fra ${stale.fetched_at}.`,
       };
     }
     throw new Error(`Kunne ikke hente TradingView-data: ${errorMessage(error)}`);
@@ -475,8 +485,16 @@ serve(async (request) => {
       return json({ error: "This account is not allowed" }, 403);
     }
 
+    const body = (await request.json().catch(() => ({}))) as {
+      mode?: unknown;
+    };
+    const openingMode = body.mode === "opening";
+
     const [scan, growth, news] = await Promise.all([
-      getScan(),
+      getScan(
+        openingMode ? "scan-opening" : "scan",
+        openingMode ? OPENING_SCAN_TTL_SECONDS : SCAN_TTL_SECONDS,
+      ),
       getGrowth(),
       getNews(),
     ]);
