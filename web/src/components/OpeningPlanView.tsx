@@ -18,14 +18,38 @@ import type { PlannedCandidate, PremarketReport } from "../core/types";
 import type { MarketSnapshot } from "../lib/api";
 import { InlineNotice } from "./ui";
 
-function statusTone(status: OpeningStatus): "positive" | "negative" | "neutral" {
+function statusTone(
+  status: OpeningStatus,
+): "positive" | "negative" | "neutral" | "warning" {
   if (status === "klar" || status === "target") {
     return "positive";
   }
-  if (status === "stoppet" || status === "ugyldig") {
+  if (status === "stoppet" || status === "ugyldig" || status === "under-sone") {
     return "negative";
   }
+  if (status === "over-sone") {
+    return "warning";
+  }
   return "neutral";
+}
+
+function zoneText(plan: OpeningPlan): string {
+  if (!plan.entryZone.valid) {
+    return "ingen gyldig sone";
+  }
+  if (plan.zoneStatus === "above") {
+    return "åpnet over sonen";
+  }
+  if (plan.zoneStatus === "below") {
+    return "åpnet under sonen";
+  }
+  if (plan.currentZoneStatus === "above") {
+    return "åpnet i sonen · nå over";
+  }
+  if (plan.currentZoneStatus === "below") {
+    return "åpnet i sonen · nå under";
+  }
+  return "i sonen";
 }
 
 function timingTone(phase: OpeningPhase): "success" | "warning" | "info" {
@@ -131,7 +155,8 @@ export function OpeningPlanView({
           <p>
             Rapporten bruker gårsdagens sluttkurs. Her regnes gevinstmål og
             tapsgrense på nytt fra faktisk åpningskurs, slik at et gap ikke
-            gjør den gamle planen misvisende.
+            gjør den gamle planen misvisende. Kjøpssonen er 0,5 × ATR rundt
+            sluttkursen, begrenset av rapportens stop og target.
           </p>
         </div>
         <div className="opening-actions">
@@ -170,6 +195,7 @@ export function OpeningPlanView({
             <tr>
               <th>Aksje</th>
               <th>Rapport-entry</th>
+              <th>Kjøpssone</th>
               <th>Åpning</th>
               <th>Gap</th>
               <th>Nå / VWAP</th>
@@ -187,6 +213,14 @@ export function OpeningPlanView({
                 </td>
                 <td data-label="Rapport-entry">
                   {formatPrice(plan.referenceEntry)} kr
+                </td>
+                <td data-label="Kjøpssone">
+                  <strong>
+                    {plan.entryZone.valid
+                      ? `${formatPrice(plan.entryZone.low)}–${formatPrice(plan.entryZone.high)}`
+                      : "Ingen gyldig"}
+                  </strong>
+                  <small>{zoneText(plan)}</small>
                 </td>
                 <td data-label="Åpning">
                   {formatPrice(plan.openingPrice)} kr
@@ -247,6 +281,8 @@ export function OpeningPlanView({
       ) : null}
 
       <p className="table-footnote">
+        Kjøpssone = 0,5 × ATR rundt gårsdagens sluttkurs, begrenset av
+        rapportens stop og target. Utenfor sonen er standarden å stå over.
         Gammel plan = rapportens target/stop. Ny plan = samme prosentsatser
         regnet fra åpningskursen. R:R er etter kurtasje. VWAP er dagens
         volumvektede snittkurs fra TradingView.

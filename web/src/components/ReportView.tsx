@@ -11,6 +11,7 @@ import {
 } from "../core/format";
 import { nordnetUrl } from "../core/nordnet";
 import { forStock, uniqueNews, type NewsFeed } from "../core/news";
+import { buildEntryZone } from "../core/opening";
 import { isAtHigh } from "../core/screen";
 import {
   atrPct,
@@ -339,6 +340,7 @@ function CandidateDetails({
   const stock = candidate.stock;
   const trade = planned.trade;
   const settings = report.settings;
+  const entryZone = buildEntryZone(planned);
   const newsItems = news ? uniqueNews(forStock(news, stock), 3) : [];
   const today = osloDateString(report.generatedAt);
   const earningsText = stock.earningsDate
@@ -371,6 +373,19 @@ function CandidateDetails({
           <span>Rapportens entry</span>
           <strong>{formatPrice(stock.close)} kr</strong>
           <small>gårsdagens sluttkurs – se åpningsplanen</small>
+        </div>
+        <div className={entryZone.valid ? "entry-zone" : "entry-zone invalid"}>
+          <span>Anbefalt kjøpssone</span>
+          <strong>
+            {entryZone.valid
+              ? `${formatPrice(entryZone.low)}–${formatPrice(entryZone.high)} kr`
+              : "Stå over"}
+          </strong>
+          <small>
+            {entryZone.valid
+              ? "0,5 × ATR · utenfor sonen = stå over"
+              : "ingen gyldig sone i dag"}
+          </small>
         </div>
         <div>
           <span>Antall aksjer</span>
@@ -480,13 +495,16 @@ function CandidateDetails({
       <h3>Gevinst- og tapsscenarioer</h3>
       <ScenarioTable trade={trade} />
       <p className="report-note">
-        Kjøpsprisen er estimert fra siste sluttkurs. Faktisk åpningskurs og
-        kurtasje kan avvike. Scenariene er netto etter kurtasje og eventuell
-        konfigurert slippage, men før skatt.
+        Kjøpssone og kjøpspris er estimert fra siste sluttkurs. Faktisk
+        åpningskurs og kurtasje kan avvike. Scenariene er netto etter kurtasje
+        og eventuell konfigurert slippage, men før skatt.
       </p>
       <h3>Følg med etter åpning</h3>
       <p className="report-note">
-        Bekreft at kursen holder seg over siste sluttkurs og SMA5 (
+        {entryZone.valid
+          ? `Bekreft at kursen åpner innenfor kjøpssonen ${formatPrice(entryZone.low)}–${formatPrice(entryZone.high)} kr. Utenfor sonen: stå over. `
+          : "Det finnes ingen gyldig kjøpssone i dag – vurder å stå over. "}
+        Inne i sonen: bekreft at kursen holder seg over VWAP/SMA5 (
         {formatPrice(stock.sma5)} kr), og at volumet er unormalt høyt. Ved
         negativ nyhet eller brudd på støtten: vurder å stå over eller bruk
         tapsgrensen.

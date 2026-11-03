@@ -10,8 +10,12 @@ export type OpeningStatus =
   | "klar"
   | "stoppet"
   | "target"
+  | "over-sone"
+  | "under-sone"
   | "ugyldig"
   | "stengt";
+
+export type OpeningZoneStatus = "inside" | "above" | "below" | "invalid";
 
 export const OPENING_STATUS_LABELS: Record<OpeningStatus, string> = {
   "for-tidlig": "Før åpning",
@@ -19,6 +23,8 @@ export const OPENING_STATUS_LABELS: Record<OpeningStatus, string> = {
   klar: "Innenfor plan",
   stoppet: "Stop brutt",
   target: "Target nådd",
+  "over-sone": "Over kjøpssone",
+  "under-sone": "Under kjøpssone",
   ugyldig: "Ugyldig",
   stengt: "Stengt",
 };
@@ -27,6 +33,64 @@ export const OPENING_STATUS_LABELS: Record<OpeningStatus, string> = {
 export const OPENING_PLAN_READY_MINUTES = 15;
 export const OPENING_PLAN_RECOMMENDED_MINUTES = 30;
 export const BIG_GAP_PCT = 0.02;
+export const ENTRY_ZONE_ATR_MULTIPLIER = 0.5;
+
+export interface EntryZone {
+  low: number;
+  high: number;
+  reference: number;
+  atr: number | null;
+  distance: number;
+  widthPct: number;
+  valid: boolean;
+}
+
+export function buildEntryZone(
+  planned: PlannedCandidate,
+  atrMultiplier: number = ENTRY_ZONE_ATR_MULTIPLIER,
+): EntryZone {
+  const reference = planned.candidate.stock.close;
+  const stop = planned.trade.stopPrice;
+  const target = planned.trade.targetPrice;
+  const atr = planned.candidate.stock.atr;
+  const planDistance = Math.min(reference - stop, target - reference);
+  const fallbackDistance = planDistance > 0 ? planDistance * 0.5 : 0;
+  const distance =
+    atr !== null && atr > 0 ? atr * atrMultiplier : fallbackDistance;
+  const low = Math.max(stop, reference - distance);
+  const high = Math.min(target, reference + distance);
+  const valid =
+    reference > 0 &&
+    stop > 0 &&
+    target > 0 &&
+    distance > 0 &&
+    low < high;
+  return {
+    low,
+    high,
+    reference,
+    atr,
+    distance,
+    widthPct: reference > 0 ? (high - low) / reference : 0,
+    valid,
+  };
+}
+
+function zoneStatusFor(
+  price: number,
+  zone: EntryZone,
+): OpeningZoneStatus {
+  if (!zone.valid) {
+    return "invalid";
+  }
+  if (price > zone.high) {
+    return "above";
+  }
+  if (price < zone.low) {
+    return "below";
+  }
+  return "inside";
+}
 
 export interface OpeningPlan {
   ticker: string;
@@ -39,6 +103,9 @@ export interface OpeningPlan {
   vwap: number | null;
   gapPct: number | null;
   vsVwapPct: number | null;
+  entryZone: EntryZone;
+  zoneStatus: OpeningZoneStatus;
+  currentZoneStatus: OpeningZoneStatus;
   oldTarget: number;
   oldStop: number;
   oldRewardRiskAtOpen: number | null;
@@ -111,6 +178,9 @@ export function buildOpeningPlan(
   const oldStop = planned.trade.stopPrice;
   const openingPrice = quote?.open ?? null;
   const currentPrice = quote?.close ?? referenceEntry;
+  const entryZone = buildEntryZone(planned);
+  const zoneStatus = zoneStatusFor(openingPrice ?? currentPrice, entryZone);
+  const currentZoneStatus = zoneStatusFor(currentPrice, entryZone);
 
   if (!quote || openingPrice === null || openingPrice <= 0) {
     return {
@@ -124,6 +194,9 @@ export function buildOpeningPlan(
       vwap: quote?.vwap ?? null,
       gapPct: null,
       vsVwapPct: null,
+      entryZone,
+      zoneStatus,
+      currentZoneStatus,
       oldTarget,
       oldStop,
       oldRewardRiskAtOpen: null,
@@ -159,6 +232,17 @@ export function buildOpeningPlan(
       `${gapPct > 0 ? "Gap opp" : "Gap ned"} ${(Math.abs(gapPct) * 100).toFixed(1)} % fra rapportens entry.`,
     );
   }
+  if (!entryZone.valid) {
+    reasons.push("Ingen gyldig kjøpssone – stå over.");
+  } else if (openingPrice > entryZone.high) {
+    reasons.push("Åpnet over kjøpssonen – ikke jag.");
+  } else if (openingPrice < entryZone.low) {
+    reasons.push("Åpnet under kjøpssonen – setupet er svekket.");
+  } else if (currentZoneStatus === "above") {
+    reasons.push("Kursen er nå over kjøpssonen.");
+  } else if (currentZoneStatus === "below") {
+    reasons.push("Kursen er nå under kjøpssonen.");
+  }
   if (openingPrice >= oldTarget) {
     reasons.push("Gammel target lå under åpningskurs – gammel plan er ugyldig.");
   } else if (openingPrice <= oldStop) {
@@ -185,6 +269,15 @@ export function buildOpeningPlan(
   } else if (!newPlan.feasible) {
     status = "ugyldig";
     statusText = "For liten kapital til én aksje";
+  } else if (!entryZone.valid) {
+    status = "ugyldig";
+    statusText = "Ingen gyldig kjøpssone";
+  } else if (zoneStatus === "above") {
+    status = "over-sone";
+    statusText = "Åpnet over kjøpssone – stå over";
+  } else if (zoneStatus === "below") {
+    status = "under-sone";
+    statusText = "Åpnet under kjøpssone – stå over";
   } else if (currentPrice <= newPlan.stopPrice) {
     status = "stoppet";
     statusText = "Under ny stop";
@@ -194,6 +287,12 @@ export function buildOpeningPlan(
   } else if (phase === "closed") {
     status = "stengt";
     statusText = "Børsen er stengt";
+  } else if (currentZoneStatus === "above") {
+    status = "over-sone";
+    statusText = "Over kjøpssone – ikke jag";
+  } else if (currentZoneStatus === "below") {
+    status = "under-sone";
+    statusText = "Under kjøpssone – stå over";
   } else if (vwap !== null && currentPrice < vwap) {
     status = "vent";
     statusText = "Under VWAP";
@@ -216,6 +315,9 @@ export function buildOpeningPlan(
     vwap,
     gapPct,
     vsVwapPct,
+    entryZone,
+    zoneStatus,
+    currentZoneStatus,
     oldTarget,
     oldStop,
     oldRewardRiskAtOpen,

@@ -37,6 +37,8 @@ Oppsett:
 - «Ingen anbefalte kandidater i dag – vurder å stå over» når ingen er gode nok.
 - Nyhetsliste fra NewsWeb med enkel positiv/negativ/nøytral-analyse.
 - Handelsplan med hele aksjer, kurtasje, mål, stop, reward/risk og scenarier.
+- Egen kjøpssone før åpning: 0,5 × ATR rundt gårsdagens sluttkurs, begrenset
+  av rapportens stop og target. Åpning utenfor sonen betyr «stå over».
 - Egen åpningsplan som henter åpningskurs og VWAP etter børsåpning, regner
   stop og gevinstmål på nytt fra faktisk åpning og viser om gammel plan ble
   ugyldig etter et gap. Bruk den tidligst 09:15, helst 09:30.

@@ -762,6 +762,12 @@ code {
   color: var(--negative);
 }
 
+.opening-status.tone-warning {
+  border-color: rgba(255, 200, 87, 0.4);
+  background: rgba(255, 200, 87, 0.1);
+  color: var(--warning);
+}
+
 .opening-status.tone-neutral {
   background: var(--bg-soft);
   color: var(--muted);
@@ -1091,6 +1097,16 @@ details.candidate-card[open] > summary::after {
 .report-grid small {
   color: var(--muted);
   font-size: 0.66rem;
+}
+
+.report-grid > .entry-zone {
+  border-color: rgba(97, 220, 170, 0.35);
+  background: rgba(97, 220, 170, 0.06);
+}
+
+.report-grid > .entry-zone.invalid {
+  border-color: rgba(255, 200, 87, 0.4);
+  background: rgba(255, 200, 87, 0.08);
 }
 
 .report-cols {
