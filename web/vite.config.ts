@@ -19,7 +19,7 @@ export default defineConfig({
         name: "Tollbugata Profits",
         short_name: "Tollbugata",
         description:
-          "Pre-market daytrading-rapport for Oslo Børs med manuell handelsplan og handelsdagbok.",
+          "Oppdatert handelsrapport for Oslo Børs med manuell handelsplan og handelsdagbok.",
         lang: "nb",
         dir: "ltr",
         start_url: "/tollbugata-profits/",
