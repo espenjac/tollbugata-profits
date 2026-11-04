@@ -381,7 +381,7 @@ export function JournalPage() {
                 Gevinstmål for {selectedHolding?.ticker}:{" "}
                 <strong>{formatPrice(selectedPlan.targetPrice)} kr</strong>{" "}
                 (netto {formatMoney(selectedPlan.targetNet, 0, true)} etter
-                salgskurtasje). Kursen er forhåndsutfylt med målet – endre til
+                kurtasje). Kursen er forhåndsutfylt med målet – endre til
                 faktisk salgskurs.
               </div>
             ) : null}
