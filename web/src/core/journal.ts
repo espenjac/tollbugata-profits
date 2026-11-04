@@ -1,4 +1,4 @@
-import type { Settings } from "./config";
+import type { Settings, TradeConfig } from "./config";
 
 const TICKER_RE = /^[A-Z0-9][A-Z0-9._-]{0,19}$/;
 
@@ -36,6 +36,38 @@ export interface Holding {
   quantity: number;
   costBasis: number;
   averageCost: number | null;
+}
+
+export interface HoldingPlan {
+  targetPrice: number;
+  targetNet: number;
+  stopPrice: number;
+  stopNet: number;
+}
+
+/** Sell levels for an actual position, using the same percentages as the report. */
+export function holdingPlan(
+  holding: Holding,
+  config: TradeConfig,
+): HoldingPlan | null {
+  const cost = holding.averageCost;
+  if (cost === null || cost <= 0 || holding.quantity <= 0) {
+    return null;
+  }
+  const targetPrice = cost * (1 + config.targetPct);
+  const stopPrice = cost * (1 - config.stopLossPct);
+  const slippage = Math.max(0, config.slippagePct);
+  const targetNet = money(
+    holding.quantity * targetPrice * (1 - slippage) -
+      holding.costBasis -
+      config.sellFee,
+  );
+  const stopNet = money(
+    holding.quantity * stopPrice * (1 - slippage) -
+      holding.costBasis -
+      config.sellFee,
+  );
+  return { targetPrice, targetNet, stopPrice, stopNet };
 }
 
 export interface JournalSummary {

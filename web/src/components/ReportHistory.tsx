@@ -14,14 +14,11 @@ export function ReportHistory({
     return null;
   }
   return (
-    <section className="panel history-panel">
-      <div className="panel-heading">
-        <div>
-          <p className="eyebrow">Arkiv</p>
-          <h2>Rapporthistorikk</h2>
-        </div>
-        <span className="muted">{history.length} siste</span>
-      </div>
+    <details className="panel history-panel">
+      <summary>
+        <span>Rapporthistorikk</span>
+        <small>{history.length} siste</small>
+      </summary>
       <div className="history-list">
         {history.map((item) => (
           <div className="history-row" key={item.id}>
@@ -47,6 +44,6 @@ export function ReportHistory({
           </div>
         ))}
       </div>
-    </section>
+    </details>
   );
 }

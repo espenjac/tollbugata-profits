@@ -41,13 +41,13 @@ npm run preview    # forhåndsvis produksjonsbygget
   Python-implementasjonen.
 - `src/lib/api.ts` er Supabase-klienten for rapport, historikk, innstillinger
   og dagbok. All persistens går mot Postgres.
-- `src/lib/useDashboard.ts` henter markedsdata via Edge Function, lager dagens
-  rapport første gang appen åpnes, og lagrer den uforanderlig med
+- `src/lib/useDashboard.ts` henter markedsdata via Edge Function og bygger
+  rapporten på nytt ved åpning og hver oppdatering. Dagens rad oppdateres med
   `unique(user_id, report_date)`.
 - `src/pages/JournalPage.tsx` er `/logg`. Den henter bare Supabase-data og
   kontakter aldri markeds-API-ene.
-- Rapporthistorikk viser lagrede rapporter som de var. Filtre påvirker tabellen
-  og nyhetslisten, ikke den lagrede rapporten.
+- Rapporthistorikk inneholder siste lagrede versjon per dato. Rapporten
+  erstattes når du oppdaterer samme dag.
 
 Base-pathen `/tollbugata-profits/` er hardkodet i `vite.config.ts`,
 `public/404.html` og PWA-manifestet. Hvis repositoryet får et annet navn, må

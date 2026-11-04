@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_SETTINGS, settingsForCapital, type Settings } from "../core/config";
 import { deriveCash } from "../core/journal";
-import { buildPremarketReport } from "../core/premarket";
+import { buildMarketReport } from "../core/report";
 import { DEFAULT_CRITERIA, screen, type Criteria } from "../core/screen";
-import type { PremarketReport } from "../core/types";
+import type { MarketReport } from "../core/types";
 import {
   fetchMarketSnapshot,
-  fetchOpeningSnapshot,
   loadReportByDate,
   loadReportById,
   loadReportHistory,
@@ -21,11 +20,8 @@ import type { JournalState } from "../core/journal";
 
 interface DashboardState {
   snapshot: MarketSnapshot | null;
-  openingSnapshot: MarketSnapshot | null;
-  openingRefreshing: boolean;
-  openingError: string | null;
-  report: PremarketReport | null;
-  viewedReport: PremarketReport | null;
+  report: MarketReport | null;
+  viewedReport: MarketReport | null;
   history: ReportHistoryItem[];
   journal: JournalState | null;
   settings: Settings;
@@ -38,19 +34,14 @@ interface DashboardState {
   screenResult: ReturnType<typeof screen> | null;
   setCriteria: (criteria: Criteria) => void;
   refresh: () => Promise<void>;
-  refreshOpening: () => Promise<void>;
   viewReport: (reportId: string) => Promise<void>;
   clearViewedReport: () => void;
 }
 
 export function useDashboard(userId: string): DashboardState {
   const [snapshot, setSnapshot] = useState<MarketSnapshot | null>(null);
-  const [openingSnapshot, setOpeningSnapshot] =
-    useState<MarketSnapshot | null>(null);
-  const [openingRefreshing, setOpeningRefreshing] = useState(false);
-  const [openingError, setOpeningError] = useState<string | null>(null);
-  const [report, setReport] = useState<PremarketReport | null>(null);
-  const [viewedReport, setViewedReport] = useState<PremarketReport | null>(null);
+  const [report, setReport] = useState<MarketReport | null>(null);
+  const [viewedReport, setViewedReport] = useState<MarketReport | null>(null);
   const [history, setHistory] = useState<ReportHistoryItem[]>([]);
   const [journal, setJournal] = useState<JournalState | null>(null);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
@@ -77,7 +68,6 @@ export function useDashboard(userId: string): DashboardState {
       setError(null);
       setWarning(null);
       setNotice(null);
-      setOpeningError(null);
 
       const date = todayDate();
       const now = new Date();
@@ -99,30 +89,22 @@ export function useDashboard(userId: string): DashboardState {
         try {
           freshSnapshot = await fetchMarketSnapshot();
           setSnapshot(freshSnapshot);
-          setOpeningSnapshot(freshSnapshot);
         } catch (snapshotError) {
           snapshotWarning =
             snapshotError instanceof Error
               ? snapshotError.message
               : String(snapshotError);
-          if (!existingReport) {
-            setSnapshot(null);
-            throw new Error(
-              `Kunne ikke hente markedsdata og det finnes ingen lagret rapport for i dag. ${snapshotWarning}`,
-            );
-          }
           setSnapshot(null);
         }
 
-        let createdReport = false;
-        if (!existingReport && freshSnapshot) {
+        if (freshSnapshot) {
           const result = screen(
             freshSnapshot.universe.stocks,
             criteriaRef.current,
           );
           const cash = loadedJournal ? deriveCash(loadedJournal) : 5000;
           const reportSettings = settingsForCapital(loadedSettings, cash);
-          const built = buildPremarketReport(
+          const built = buildMarketReport(
             result.matches,
             criteriaRef.current,
             freshSnapshot.universe,
@@ -131,10 +113,24 @@ export function useDashboard(userId: string): DashboardState {
             date,
             now,
           );
-          const savedReport = await saveReport(userId, date, built);
-          createdReport = true;
-          setReport(savedReport);
-          setHistory(await loadReportHistory(userId).catch(() => loadedHistory));
+          setReport(built);
+          try {
+            const saved = await saveReport(userId, date, built);
+            setReport(saved);
+          } catch (saveError) {
+            setWarning(
+              `Rapporten ble oppdatert i appen, men kunne ikke lagres: ${
+                saveError instanceof Error ? saveError.message : String(saveError)
+              }`,
+            );
+          }
+          setHistory(
+            await loadReportHistory(userId).catch(() => loadedHistory),
+          );
+        } else if (!existingReport) {
+          throw new Error(
+            `Kunne ikke hente markedsdata og det finnes ingen lagret rapport for i dag. ${snapshotWarning}`,
+          );
         }
 
         if (snapshotWarning) {
@@ -142,11 +138,7 @@ export function useDashboard(userId: string): DashboardState {
             `Ferske markedsdata kunne ikke hentes (${snapshotWarning}). Viser lagret rapport for i dag.`,
           );
         } else if (isRefresh) {
-          setNotice(
-            createdReport
-              ? "Markedsdata er oppdatert, og dagens rapport er opprettet."
-              : "Markedsdata er oppdatert. Dagens rapport er ikke endret.",
-          );
+          setNotice("Rapporten er oppdatert med siste kurs.");
         }
         if (!loadedJournal) {
           setWarning(
@@ -181,25 +173,9 @@ export function useDashboard(userId: string): DashboardState {
   }, [userId, load]);
 
   const refresh = useCallback(async () => {
+    setViewedReport(null);
     await load(true);
   }, [load]);
-
-  const refreshOpening = useCallback(async () => {
-    setOpeningRefreshing(true);
-    setOpeningError(null);
-    try {
-      const fresh = await fetchOpeningSnapshot();
-      setOpeningSnapshot(fresh);
-    } catch (refreshError) {
-      setOpeningError(
-        refreshError instanceof Error
-          ? refreshError.message
-          : String(refreshError),
-      );
-    } finally {
-      setOpeningRefreshing(false);
-    }
-  }, []);
 
   const viewReport = useCallback(
     async (reportId: string) => {
@@ -234,9 +210,6 @@ export function useDashboard(userId: string): DashboardState {
 
   return {
     snapshot,
-    openingSnapshot,
-    openingRefreshing,
-    openingError,
     report,
     viewedReport,
     history,
@@ -251,7 +224,6 @@ export function useDashboard(userId: string): DashboardState {
     screenResult,
     setCriteria,
     refresh,
-    refreshOpening,
     viewReport,
     clearViewedReport,
   };

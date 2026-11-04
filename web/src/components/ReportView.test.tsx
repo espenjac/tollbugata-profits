@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "../core/config";
 import { parseScannerPayload } from "../core/market";
 import { parseNewsPayload } from "../core/news";
-import { buildPremarketReport } from "../core/premarket";
+import { buildMarketReport } from "../core/report";
 import { DEFAULT_CRITERIA, screen } from "../core/screen";
 import type { Universe } from "../core/types";
 import growthFixture from "../core/__fixtures__/growth.json";
@@ -39,7 +39,7 @@ function makeReport() {
   const universe = makeUniverse();
   const result = screen(universe.stocks, DEFAULT_CRITERIA);
   const news = makeNews();
-  const report = buildPremarketReport(
+  const report = buildMarketReport(
     result.matches,
     DEFAULT_CRITERIA,
     universe,

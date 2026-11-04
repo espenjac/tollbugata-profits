@@ -1,13 +1,14 @@
 import type { Settings } from "./config";
-import { daysUntil, isPremarket as isPremarketTime } from "./dates";
+import { daysUntil } from "./dates";
 import { formatDateTime, formatMoney, formatPct } from "./format";
 import type { NewsFeed } from "./news";
+import { marketSession } from "./session";
 import { isNegativeSignal } from "./types";
 import type { Criteria } from "./screen";
 import { rankCandidates } from "./strategy";
 import type { Candidate } from "./types";
 import { buildTradePlan } from "./trade";
-import type { PlannedCandidate, PremarketReport, TradePlan, Universe } from "./types";
+import type { MarketReport, PlannedCandidate, TradePlan, Universe } from "./types";
 
 export { type PlannedCandidate };
 
@@ -85,7 +86,7 @@ function blockReasons(
   return values;
 }
 
-export function buildPremarketReport(
+export function buildMarketReport(
   stocks: Iterable<unknown>,
   criteria: Criteria,
   universe: Universe,
@@ -93,7 +94,7 @@ export function buildPremarketReport(
   settings: Settings,
   today: string,
   now: Date = new Date(),
-): PremarketReport {
+): MarketReport {
   const stockList = Array.from(stocks as Iterable<import("./types").Stock>);
   const ranked = rankCandidates(
     stockList,
@@ -168,20 +169,13 @@ export function buildPremarketReport(
         `høyere mål eller la handelen være.`,
     );
   }
-  if (!isPremarketTime(now)) {
-    warnings.push(
-      "Rapporten ble laget etter børsåpning. Daglige data kan da inneholde " +
-        "dagens delvise volum; bruk den som et estimat, ikke som ren pre-market-data.",
-    );
-  }
-
+  const marketOpen = marketSession(now) === "open";
   const dataBasis =
-    "Siste avsluttede daglige TradingView-data" +
-    ` (${formatDateTime(universe.fetchedAt)})` +
+    `Siste kurs fra TradingView (${formatDateTime(universe.fetchedAt)})` +
     (news !== null
       ? ` og NewsWeb til ${formatDateTime(news.fetchedAt)}`
       : " uten nyhetshenting") +
-    ". Ingen intradagdata, VWAP eller åpningsrange inngår i scoren.";
+    ". Score bruker daglige data; kurs og handelsplan bruker siste handlede kurs.";
 
   return {
     generatedAt: now,
@@ -197,7 +191,7 @@ export function buildPremarketReport(
     newsSince: news !== null ? news.since : null,
     newsSource: news !== null ? news.source : null,
     dataBasis,
-    isPremarket: isPremarketTime(now),
+    marketOpen,
     warnings,
   };
 }

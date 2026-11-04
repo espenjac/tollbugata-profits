@@ -1,5 +1,7 @@
 // Fetches TradingView, Euronext Growth and NewsWeb server-side, caches the
-// results in Supabase and returns normalized raw payloads to the PWA.
+// results in Supabase and returns normalized raw payloads to the PWA. Scanner
+// data is cached for 30 seconds while Oslo Børs is open and 10 minutes outside
+// market hours.
 //
 // Deploy with:
 //   supabase functions deploy market-snapshot
@@ -19,7 +21,7 @@ const GROWTH_URL =
 const NEWS_URL = "https://api3.oslo.oslobors.no/v1/newsreader/list";
 
 const SCAN_TTL_SECONDS = 600;
-const OPENING_SCAN_TTL_SECONDS = 60;
+const OPEN_SCAN_TTL_SECONDS = 30;
 const NEWS_TTL_SECONDS = 300;
 const GROWTH_TTL_SECONDS = 24 * 60 * 60;
 
@@ -170,8 +172,24 @@ async function writeCache(
   }
 }
 
-function isFresh(row: CacheRow | null): boolean {
-  return row !== null && new Date(row.expires_at).getTime() > Date.now();
+function isFresh(
+  row: CacheRow | null,
+  maxAgeSeconds?: number,
+): boolean {
+  if (row === null) {
+    return false;
+  }
+  const now = Date.now();
+  if (new Date(row.expires_at).getTime() <= now) {
+    return false;
+  }
+  if (
+    maxAgeSeconds !== undefined &&
+    now - new Date(row.fetched_at).getTime() >= maxAgeSeconds * 1000
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function osloDateString(date: Date): string {
@@ -181,6 +199,37 @@ function osloDateString(date: Date): string {
     month: "2-digit",
     day: "2-digit",
   }).format(date);
+}
+
+function isOsloMarketOpen(now: Date): boolean {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Oslo",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const get = (type: string) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  const weekdays: Record<string, number> = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+  };
+  const weekday = weekdays[get("weekday")] ?? 0;
+  if (weekday === 0 || weekday === 6) {
+    return false;
+  }
+  const minutes = Number(get("hour")) * 60 + Number(get("minute"));
+  return minutes >= 9 * 60 && minutes <= 16 * 60 + 30;
+}
+
+function scanTtlSeconds(now: Date): number {
+  return isOsloMarketOpen(now) ? OPEN_SCAN_TTL_SECONDS : SCAN_TTL_SECONDS;
 }
 
 function newsWindowStart(now: Date): Date {
@@ -255,8 +304,7 @@ async function getScan(
   ttlSeconds: number,
 ) {
   const cached = await readCache(cacheKey);
-  const fallback = cacheKey === "scan-opening" ? await readCache("scan") : null;
-  if (isFresh(cached)) {
+  if (isFresh(cached, ttlSeconds)) {
     return {
       payload: cached?.payload,
       fetchedAt: cached?.fetched_at,
@@ -292,7 +340,7 @@ async function getScan(
       warning: null,
     };
   } catch (error) {
-    const stale = cached ?? fallback;
+    const stale = cached;
     if (stale) {
       return {
         payload: stale.payload,
@@ -485,16 +533,8 @@ serve(async (request) => {
       return json({ error: "This account is not allowed" }, 403);
     }
 
-    const body = (await request.json().catch(() => ({}))) as {
-      mode?: unknown;
-    };
-    const openingMode = body.mode === "opening";
-
     const [scan, growth, news] = await Promise.all([
-      getScan(
-        openingMode ? "scan-opening" : "scan",
-        openingMode ? OPENING_SCAN_TTL_SECONDS : SCAN_TTL_SECONDS,
-      ),
+      getScan("scan", scanTtlSeconds(new Date())),
       getGrowth(),
       getNews(),
     ]);

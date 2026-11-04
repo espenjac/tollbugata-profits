@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../core/config";
 import { parseScannerPayload } from "../core/market";
 import { parseNewsPayload } from "../core/news";
-import { buildPremarketReport } from "../core/premarket";
+import { buildMarketReport } from "../core/report";
 import { DEFAULT_CRITERIA, screen } from "../core/screen";
 import type { JournalState } from "../core/journal";
 import type { Universe } from "../core/types";
@@ -65,7 +65,7 @@ function makeData() {
     new Date("2026-11-01T14:07:00+01:00"),
     "live",
   );
-  const report = buildPremarketReport(
+  const report = buildMarketReport(
     result.matches,
     DEFAULT_CRITERIA,
     universe,
@@ -111,7 +111,7 @@ describe("DashboardPage", () => {
     });
 
     const text = container.textContent ?? "";
-    expect(text).toContain("Kursinformasjon");
+    expect(text).toContain("Dagens rapport");
     expect(text).toContain(data.report.main?.candidate.stock.ticker ?? "");
     expect(text).toContain("Filtre");
     expect(text).toContain("Børsmeldinger");

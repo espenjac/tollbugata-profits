@@ -20,7 +20,7 @@ Opprett et gratis Supabase-prosjekt. Noter:
 
 ## 2. Kjør migreringen
 
-Enten lim inn `migrations/0001_init.sql` i SQL Editor, eller bruk Supabase CLI:
+Enten lim inn SQL-filene i `migrations/` i SQL Editor, eller bruk Supabase CLI:
 
 ```bash
 supabase link --project-ref <project-ref>
@@ -29,6 +29,8 @@ supabase db push
 
 Migreringen lager tabeller, RLS-policyer, `account_balances`-viewet og en
 trigger som oppretter profil, konto og innstillinger for nye brukere.
+`0002_report_updates.sql` legger til update-policy på `reports`, slik at dagens
+rapport kan erstattes med nyere kurs.
 
 ## 3. Google-innlogging
 
@@ -124,8 +126,8 @@ Journal-skriptet bruker `STARTING_CASH=5000` som standard og importerer ikke
 null-justeringen i den gamle filen. Rapport-skriptet konverterer Python-formatet
 (snake_case og prosenttall) til V2-formatet (camelCase og desimaltall) og
 beholder rapportdatoen i Oslo-tid. Kjør det etter at første V2-rapport er
-opprettet, eller før; `unique(user_id, report_date)` gjør at den første
-rapporten for en dato vinner.
+opprettet, eller før; rapporten for en dato oppdateres hvis du senere trykker
+«Oppdater med siste kurs» i appen.
 
 ## Gratisnivå
 

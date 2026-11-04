@@ -1,0 +1,18 @@
+import { describe, expect, it } from "vitest";
+import { marketSession } from "./session";
+
+describe("marketSession", () => {
+  it("is open during Oslo trading hours on a weekday", () => {
+    expect(marketSession(new Date("2026-11-04T10:00:00+01:00"))).toBe("open");
+    expect(marketSession(new Date("2026-11-04T16:29:00+01:00"))).toBe("open");
+  });
+
+  it("is pre-market before 09:00 and closed after 16:30", () => {
+    expect(marketSession(new Date("2026-11-04T08:59:00+01:00"))).toBe("pre");
+    expect(marketSession(new Date("2026-11-04T16:31:00+01:00"))).toBe("closed");
+  });
+
+  it("is closed on weekends", () => {
+    expect(marketSession(new Date("2026-11-07T12:00:00+01:00"))).toBe("closed");
+  });
+});

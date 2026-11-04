@@ -16,7 +16,7 @@ import {
 } from "../core/journal";
 import { parseScannerPayload } from "../core/market";
 import { emptyNewsFeed, parseNewsPayload, type NewsFeed } from "../core/news";
-import type { PremarketReport, Universe } from "../core/types";
+import type { MarketReport, Universe } from "../core/types";
 import { requireSupabase } from "./supabase";
 
 export interface ReportHistoryItem {
@@ -108,15 +108,13 @@ export async function edgeFunctionErrorMessage(
   return String(error);
 }
 
-export async function fetchMarketSnapshot(
-  mode: "default" | "opening" = "default",
-): Promise<MarketSnapshot> {
+export async function fetchMarketSnapshot(): Promise<MarketSnapshot> {
   const client = requireSupabase();
   const { data, error } = await client.functions.invoke<RawSnapshot>(
     "market-snapshot",
     {
       method: "POST",
-      body: mode === "opening" ? { mode: "opening" } : {},
+      body: {},
     },
   );
   if (error) {
@@ -182,21 +180,17 @@ export async function fetchMarketSnapshot(
   };
 }
 
-export function fetchOpeningSnapshot(): Promise<MarketSnapshot> {
-  return fetchMarketSnapshot("opening");
-}
-
-function payloadForReport(report: PremarketReport): Record<string, unknown> {
+function payloadForReport(report: MarketReport): Record<string, unknown> {
   return JSON.parse(JSON.stringify(report)) as Record<string, unknown>;
 }
 
 function hydrateReport(row: {
   generated_at?: string;
   payload: unknown;
-}): PremarketReport {
+}): MarketReport {
   const raw = row.payload as Record<string, unknown>;
   return {
-    ...(raw as unknown as PremarketReport),
+    ...(raw as unknown as MarketReport),
     generatedAt: new Date(
       (row.generated_at as string | undefined) ??
         (raw.generatedAt as string | undefined) ??
@@ -208,13 +202,14 @@ function hydrateReport(row: {
     newsSince: raw.newsSince
       ? new Date(raw.newsSince as string)
       : null,
+    marketOpen: Boolean(raw.marketOpen),
   };
 }
 
 export async function loadReportByDate(
   userId: string,
   date: string,
-): Promise<PremarketReport | null> {
+): Promise<MarketReport | null> {
   const client = requireSupabase();
   const { data, error } = await client
     .from("reports")
@@ -231,19 +226,22 @@ export async function loadReportByDate(
 export async function saveReport(
   userId: string,
   date: string,
-  report: PremarketReport,
-): Promise<PremarketReport> {
+  report: MarketReport,
+): Promise<MarketReport> {
   const client = requireSupabase();
-  const { error } = await client.from("reports").insert({
-    user_id: userId,
-    report_date: date,
-    generated_at: report.generatedAt.toISOString(),
-    main_ticker: report.main?.candidate.stock.ticker ?? null,
-    main_score: report.main?.candidate.score ?? null,
-    no_trade: report.main === null,
-    payload: payloadForReport(report),
-  });
-  if (error && error.code !== "23505") {
+  const { error } = await client.from("reports").upsert(
+    {
+      user_id: userId,
+      report_date: date,
+      generated_at: report.generatedAt.toISOString(),
+      main_ticker: report.main?.candidate.stock.ticker ?? null,
+      main_score: report.main?.candidate.score ?? null,
+      no_trade: report.main === null,
+      payload: payloadForReport(report),
+    },
+    { onConflict: "user_id,report_date" },
+  );
+  if (error) {
     throw new Error(`Kunne ikke lagre rapporten: ${error.message}`);
   }
   const saved = await loadReportByDate(userId, date);
@@ -277,7 +275,7 @@ export async function loadReportHistory(
 export async function loadReportById(
   userId: string,
   reportId: string,
-): Promise<PremarketReport | null> {
+): Promise<MarketReport | null> {
   const client = requireSupabase();
   const { data, error } = await client
     .from("reports")

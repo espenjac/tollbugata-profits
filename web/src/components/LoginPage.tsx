@@ -31,12 +31,11 @@ export function LoginPage() {
           width={72}
           height={72}
         />
-        <p className="eyebrow">Pre-market · Oslo Børs</p>
+        <p className="eyebrow">Oslo Børs · oppdatert vurdering</p>
         <h1>Tollbugata Profits</h1>
         <p className="auth-lead">
           Teknisk screening, nyhetsvurdering og manuell handelsplan for Oslo
-          Børs. Rapporten lages når appen åpnes, og alle handler registreres
-          manuelt.
+          Børs. Oppdater rapporten når du vil, og registrer handler manuelt.
         </p>
         {busy ? (
           <LoadingView message="Sender deg til Google …" />

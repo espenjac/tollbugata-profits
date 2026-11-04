@@ -11,13 +11,12 @@ import {
 } from "../core/format";
 import { nordnetUrl } from "../core/nordnet";
 import { forStock, uniqueNews, type NewsFeed } from "../core/news";
-import { buildEntryZone } from "../core/opening";
 import { isAtHigh } from "../core/screen";
 import {
   atrPct,
   riskLevel,
+  type MarketReport,
   type PlannedCandidate,
-  type PremarketReport,
   type TradePlan,
 } from "../core/types";
 import { CategoryChips, InlineNotice, SentimentBadge } from "./ui";
@@ -28,7 +27,7 @@ export function ReportView({
   historical = false,
   onBack,
 }: {
-  report: PremarketReport;
+  report: MarketReport;
   news?: NewsFeed | null;
   historical?: boolean;
   onBack?: () => void;
@@ -43,7 +42,7 @@ export function ReportView({
   }
 
   return (
-    <section className="panel report" aria-label="Dagens pre-market-rapport">
+    <section className="panel report" aria-label="Dagens rapport">
       {historical ? (
         <div className="history-banner">
           <div>
@@ -59,20 +58,18 @@ export function ReportView({
       ) : null}
       <div className="report-head">
         <div>
-          <p className="eyebrow">Pre-market · Oslo Børs</p>
+          <p className="eyebrow">Oslo Børs · oppdatert vurdering</p>
           <h2>Dagens hovedkandidat</h2>
           <p>
-            {report.dataBasis} Kandidatene er et teknisk utgangspunkt. Ikke et
-            kjøpssignal – bekreft etter åpning.
+            {report.dataBasis} Kandidatene er et teknisk utgangspunkt, ikke et
+            kjøpssignal. Bekreft kursen før du handler.
           </p>
         </div>
         <div className="report-stamp">
-          <span>Rapport generert</span>
+          <span>Rapport oppdatert</span>
           <strong>{formatDateTime(report.generatedAt)}</strong>
           <small>
-            {report.isPremarket
-              ? "før børsåpning"
-              : "etter børsåpning – estimat"}
+            {report.marketOpen ? "siste handlede kurs" : "siste sluttkurs"}
           </small>
         </div>
       </div>
@@ -236,7 +233,7 @@ function CandidateCard({
 }: {
   planned: PlannedCandidate;
   rank: number;
-  report: PremarketReport;
+  report: MarketReport;
   news: NewsFeed | null;
   variant: "main" | "alternative" | "blocked";
 }) {
@@ -333,14 +330,13 @@ function CandidateDetails({
   news,
 }: {
   planned: PlannedCandidate;
-  report: PremarketReport;
+  report: MarketReport;
   news: NewsFeed | null;
 }) {
   const candidate = planned.candidate;
   const stock = candidate.stock;
   const trade = planned.trade;
   const settings = report.settings;
-  const entryZone = buildEntryZone(planned);
   const newsItems = news ? uniqueNews(forStock(news, stock), 3) : [];
   const today = osloDateString(report.generatedAt);
   const earningsText = stock.earningsDate
@@ -370,21 +366,12 @@ function CandidateDetails({
 
       <div className="report-grid trade-grid">
         <div>
-          <span>Rapportens entry</span>
+          <span>Siste kurs</span>
           <strong>{formatPrice(stock.close)} kr</strong>
-          <small>gårsdagens sluttkurs – se åpningsplanen</small>
-        </div>
-        <div className={entryZone.valid ? "entry-zone" : "entry-zone invalid"}>
-          <span>Anbefalt kjøpssone</span>
-          <strong>
-            {entryZone.valid
-              ? `${formatPrice(entryZone.low)}–${formatPrice(entryZone.high)} kr`
-              : "Stå over"}
-          </strong>
           <small>
-            {entryZone.valid
-              ? "0,5 × ATR · utenfor sonen = stå over"
-              : "ingen gyldig sone i dag"}
+            {stock.dayReturn === null
+              ? "siste tilgjengelige kurs"
+              : `${formatPct(stock.dayReturn)} i dag`}
           </small>
         </div>
         <div>
@@ -486,28 +473,23 @@ function CandidateDetails({
             )}
           </ul>
           <p className="muted">
-            Sjekk volum og nyheter etter åpning. Rapporten utfører ingen
+            Sjekk volum og nyheter før du handler. Rapporten utfører ingen
             handler.
           </p>
         </div>
       </div>
 
-      <h3>Gevinst- og tapsscenarioer</h3>
-      <ScenarioTable trade={trade} />
+      <details className="report-scenarios">
+        <summary>Gevinst- og tapsscenarioer</summary>
+        <ScenarioTable trade={trade} />
+        <p className="report-note">
+          Scenariene er netto etter kurtasje og eventuell konfigurert slippage,
+          men før skatt.
+        </p>
+      </details>
       <p className="report-note">
-        Kjøpssone og kjøpspris er estimert fra siste sluttkurs. Faktisk
-        åpningskurs og kurtasje kan avvike. Scenariene er netto etter kurtasje
-        og eventuell konfigurert slippage, men før skatt.
-      </p>
-      <h3>Følg med etter åpning</h3>
-      <p className="report-note">
-        {entryZone.valid
-          ? `Bekreft at kursen åpner innenfor kjøpssonen ${formatPrice(entryZone.low)}–${formatPrice(entryZone.high)} kr. Utenfor sonen: stå over. `
-          : "Det finnes ingen gyldig kjøpssone i dag – vurder å stå over. "}
-        Inne i sonen: bekreft at kursen holder seg over VWAP/SMA5 (
-        {formatPrice(stock.sma5)} kr), og at volumet er unormalt høyt. Ved
-        negativ nyhet eller brudd på støtten: vurder å stå over eller bruk
-        tapsgrensen.
+        Planen er beregnet fra siste tilgjengelige kurs. Oppdater rett før du
+        handler – kursen kan ha endret seg. Rapporten sender ingen ordrer.
       </p>
     </div>
   );

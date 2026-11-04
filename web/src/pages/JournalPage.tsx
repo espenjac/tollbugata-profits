@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import { DEFAULT_SETTINGS } from "../core/config";
 import { formatDateTime, formatMoney, formatNumber, formatPrice } from "../core/format";
 import {
+  holdingPlan,
   summarizeJournal,
   tradeCashChange,
   tradeSideLabel,
@@ -221,6 +222,14 @@ export function JournalPage() {
     }
   };
 
+  const selectedHolding =
+    form.side === "sell"
+      ? summary.holdings.find((holding) => holding.ticker === form.ticker)
+      : null;
+  const selectedPlan = selectedHolding
+    ? holdingPlan(selectedHolding, DEFAULT_SETTINGS.trade)
+    : null;
+
   const startEdit = (trade: TradeEntry) => {
     setForm(formFromTrade(trade));
     setEditId(trade.id);
@@ -229,11 +238,12 @@ export function JournalPage() {
   };
 
   const startSell = (holding: Holding) => {
+    const plan = holdingPlan(holding, DEFAULT_SETTINGS.trade);
     setForm({
       ...emptyTradeForm("sell"),
       ticker: holding.ticker,
       quantity: String(holding.quantity),
-      price: holding.averageCost === null ? "" : String(holding.averageCost),
+      price: plan === null ? "" : plan.targetPrice.toFixed(2),
     });
     setEditId(null);
     setFormError(null);
@@ -366,6 +376,15 @@ export function JournalPage() {
                 }
               />
             </label>
+            {selectedPlan ? (
+              <div className="field-wide inline-hint">
+                Gevinstmål for {selectedHolding?.ticker}:{" "}
+                <strong>{formatPrice(selectedPlan.targetPrice)} kr</strong>{" "}
+                (netto {formatMoney(selectedPlan.targetNet, 0, true)} etter
+                salgskurtasje). Kursen er forhåndsutfylt med målet – endre til
+                faktisk salgskurs.
+              </div>
+            ) : null}
             <label className="field">
               <span>Kurtasje</span>
               <input
@@ -533,35 +552,52 @@ export function JournalPage() {
                   <th className="num">Antall</th>
                   <th className="num">Snittkost</th>
                   <th className="num">Kostbasis</th>
+                  <th className="num">Selg ved</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
-                {summary.holdings.map((holding) => (
-                  <tr key={holding.ticker}>
-                    <td data-label="Ticker">{holding.ticker}</td>
-                    <td data-label="Antall" className="num">
-                      {formatNumber(holding.quantity)}
-                    </td>
-                    <td data-label="Snittkost" className="num">
-                      {holding.averageCost === null
-                        ? "–"
-                        : `${formatPrice(holding.averageCost)} kr`}
-                    </td>
-                    <td data-label="Kostbasis" className="num">
-                      {formatMoney(holding.costBasis, 2)}
-                    </td>
-                    <td data-label="" className="num">
-                      <button
-                        className="btn btn-small"
-                        type="button"
-                        onClick={() => startSell(holding)}
-                      >
-                        Selg
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {summary.holdings.map((holding) => {
+                  const plan = holdingPlan(holding, DEFAULT_SETTINGS.trade);
+                  return (
+                    <tr key={holding.ticker}>
+                      <td data-label="Ticker">{holding.ticker}</td>
+                      <td data-label="Antall" className="num">
+                        {formatNumber(holding.quantity)}
+                      </td>
+                      <td data-label="Snittkost" className="num">
+                        {holding.averageCost === null
+                          ? "–"
+                          : `${formatPrice(holding.averageCost)} kr`}
+                      </td>
+                      <td data-label="Kostbasis" className="num">
+                        {formatMoney(holding.costBasis, 2)}
+                      </td>
+                      <td data-label="Selg ved" className="num">
+                        {plan === null ? (
+                          "–"
+                        ) : (
+                          <span className="holding-target">
+                            <strong>{formatPrice(plan.targetPrice)} kr</strong>
+                            <small>
+                              netto {formatMoney(plan.targetNet, 0, true)} ·
+                              stop {formatPrice(plan.stopPrice)}
+                            </small>
+                          </span>
+                        )}
+                      </td>
+                      <td data-label="" className="num">
+                        <button
+                          className="btn btn-small"
+                          type="button"
+                          onClick={() => startSell(holding)}
+                        >
+                          Selg
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -615,7 +651,18 @@ export function JournalPage() {
                         {formatNumber(trade.quantity)}
                       </td>
                       <td data-label="Kurs" className="num">
-                        {formatPrice(trade.price)}
+                        <span className="trade-price">
+                          <span>{formatPrice(trade.price)}</span>
+                          {trade.side === "buy" ? (
+                            <small>
+                              mål{" "}
+                              {formatPrice(
+                                trade.price *
+                                  (1 + DEFAULT_SETTINGS.trade.targetPct),
+                              )}
+                            </small>
+                          ) : null}
+                        </span>
                       </td>
                       <td data-label="Kurtasje" className="num">
                         {formatMoney(trade.fee, 2)}

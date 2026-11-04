@@ -129,14 +129,6 @@ export function currentSessionOpen(now: Date = new Date()): Date | null {
   return now >= open ? open : null;
 }
 
-export function isPremarket(now: Date = new Date()): boolean {
-  const parts = osloParts(now);
-  if (isWeekendDay(parts.weekday)) {
-    return true;
-  }
-  return parts.hour < 9;
-}
-
 export function minutesSince(date: Date, now: Date = new Date()): number {
   return (now.getTime() - date.getTime()) / 60_000;
 }

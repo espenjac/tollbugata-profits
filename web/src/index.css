@@ -658,140 +658,6 @@ code {
   gap: 0.8rem;
 }
 
-/* Opening plan */
-
-.opening-plan {
-  display: grid;
-  gap: 0.8rem;
-}
-
-.opening-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1.2rem;
-}
-
-.opening-head > div:first-child {
-  display: grid;
-  gap: 0.4rem;
-  max-width: 62rem;
-}
-
-.opening-head p:not(.eyebrow) {
-  color: var(--muted);
-  font-size: 0.86rem;
-}
-
-.opening-actions {
-  display: grid;
-  justify-items: end;
-  gap: 0.35rem;
-  flex-shrink: 0;
-}
-
-.opening-actions small {
-  color: var(--muted);
-  font-size: 0.7rem;
-  text-align: right;
-}
-
-.opening-timing {
-  padding: 0.65rem 0.8rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  font-size: 0.82rem;
-  font-weight: 600;
-}
-
-.opening-timing.timing-warning {
-  border-color: rgba(255, 200, 87, 0.4);
-  background: rgba(255, 200, 87, 0.08);
-  color: var(--warning);
-}
-
-.opening-timing.timing-success {
-  border-color: rgba(97, 220, 170, 0.35);
-  background: rgba(97, 220, 170, 0.08);
-  color: var(--positive);
-}
-
-.opening-timing.timing-info {
-  background: var(--bg-soft);
-  color: var(--muted);
-}
-
-.opening-table td small {
-  display: block;
-  margin-top: 0.18rem;
-  color: var(--muted);
-  font-size: 0.68rem;
-}
-
-.opening-gap {
-  font-weight: 700;
-}
-
-.opening-gap.gap-up {
-  color: var(--positive);
-}
-
-.opening-gap.gap-down {
-  color: var(--negative);
-}
-
-.opening-status {
-  display: inline-block;
-  padding: 0.18rem 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.opening-status.tone-positive {
-  border-color: rgba(97, 220, 170, 0.4);
-  background: rgba(97, 220, 170, 0.1);
-  color: var(--positive);
-}
-
-.opening-status.tone-negative {
-  border-color: rgba(255, 111, 111, 0.4);
-  background: rgba(255, 111, 111, 0.1);
-  color: var(--negative);
-}
-
-.opening-status.tone-warning {
-  border-color: rgba(255, 200, 87, 0.4);
-  background: rgba(255, 200, 87, 0.1);
-  color: var(--warning);
-}
-
-.opening-status.tone-neutral {
-  background: var(--bg-soft);
-  color: var(--muted);
-}
-
-.opening-reasons {
-  display: grid;
-  gap: 0.25rem;
-  padding: 0.65rem 0.8rem;
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-sm);
-  background: var(--bg-soft);
-  color: var(--muted);
-  font-size: 0.76rem;
-}
-
-.opening-reasons p {
-  margin: 0;
-}
-
-.opening-reasons strong {
-  color: var(--text-strong);
-}
-
 .report-head {
   display: flex;
   justify-content: space-between;
@@ -1097,16 +963,6 @@ details.candidate-card[open] > summary::after {
 .report-grid small {
   color: var(--muted);
   font-size: 0.66rem;
-}
-
-.report-grid > .entry-zone {
-  border-color: rgba(97, 220, 170, 0.35);
-  background: rgba(97, 220, 170, 0.06);
-}
-
-.report-grid > .entry-zone.invalid {
-  border-color: rgba(255, 200, 87, 0.4);
-  background: rgba(255, 200, 87, 0.08);
 }
 
 .report-cols {
@@ -1763,6 +1619,80 @@ th button.sort-active {
   font-size: 0.78rem;
 }
 
+.holding-target,
+.trade-price {
+  display: grid;
+  gap: 0.05rem;
+  justify-items: end;
+}
+
+.holding-target strong {
+  color: var(--text-strong);
+}
+
+.holding-target small,
+.trade-price small {
+  color: var(--muted);
+  font-size: 0.66rem;
+}
+
+.inline-hint {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg-soft);
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.screening-panel > summary,
+.history-panel > summary,
+.report-scenarios > summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: baseline;
+  cursor: pointer;
+  list-style: none;
+  color: var(--text-strong);
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 0.15rem 0;
+}
+
+.screening-panel > summary::-webkit-details-marker,
+.history-panel > summary::-webkit-details-marker,
+.report-scenarios > summary::-webkit-details-marker {
+  display: none;
+}
+
+.screening-panel > summary small,
+.history-panel > summary small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.screening-panel[open] > summary,
+.history-panel[open] > summary,
+.report-scenarios[open] > summary {
+  margin-bottom: 0.8rem;
+}
+
+.screening-body {
+  display: grid;
+  gap: 1rem;
+}
+
+.report-scenarios {
+  margin-top: 0.5rem;
+}
+
+.report-scenarios > summary {
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+
 /* Loading */
 
 .loading-view {
@@ -1917,7 +1847,6 @@ th button.sort-active {
   }
 
   .report-head,
-  .opening-head,
   .candidate-summary,
   .candidate-head,
   .news-head,
@@ -1930,14 +1859,6 @@ th button.sort-active {
   .journal-balance {
     text-align: left;
     min-width: 0;
-  }
-
-  .opening-actions {
-    justify-items: stretch;
-  }
-
-  .opening-actions small {
-    text-align: left;
   }
 
   .score-row {

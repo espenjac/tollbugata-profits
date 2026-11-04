@@ -116,10 +116,10 @@ export const DEFAULT_TRADE_CONFIG: TradeConfig = {
   capital: 5_000,
   buyFee: 29,
   sellFee: 29,
-  targetPct: 0.02,
+  targetPct: 0.05,
   stopLossPct: 0.02,
   slippagePct: 0,
-  minRewardRisk: 0,
+  minRewardRisk: 1,
   scenarioPcts: [-0.02, -0.01, 0.01, 0.02, 0.03, 0.04, 0.05],
 };
 

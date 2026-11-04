@@ -75,10 +75,10 @@ DEFAULT_TRADE = {
     "capital": 5000.0,
     "buyFee": 29.0,
     "sellFee": 29.0,
-    "targetPct": 0.02,
+    "targetPct": 0.05,
     "stopLossPct": 0.02,
     "slippagePct": 0.0,
-    "minRewardRisk": 0.0,
+    "minRewardRisk": 1.0,
     "scenarioPcts": [-0.02, -0.01, 0.01, 0.02, 0.03, 0.04, 0.05],
 }
 

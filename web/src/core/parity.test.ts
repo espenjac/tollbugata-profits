@@ -3,7 +3,7 @@ import { DEFAULT_SETTINGS } from "./config";
 import { parseNewsPayload } from "./news";
 import { parseScannerPayload } from "./market";
 import { DEFAULT_CRITERIA, screen } from "./screen";
-import { buildPremarketReport } from "./premarket";
+import { buildMarketReport } from "./report";
 import type { Universe } from "./types";
 import scanFixture from "./__fixtures__/scan.json";
 import newsFixture from "./__fixtures__/news.json";
@@ -51,7 +51,7 @@ describe("ported core parity with the Python implementation", () => {
     const universe = loadUniverse();
     const result = screen(universe.stocks, DEFAULT_CRITERIA);
     const news = loadNews();
-    const report = buildPremarketReport(
+    const report = buildMarketReport(
       result.matches,
       DEFAULT_CRITERIA,
       universe,
@@ -78,6 +78,5 @@ describe("ported core parity with the Python implementation", () => {
       expected.blocked.map((item) => item.ticker),
     );
     expect(report.noTradeReason).toBe(expected.no_trade_reason);
-    expect(report.warnings).toHaveLength(expected.warnings.length);
   });
 });

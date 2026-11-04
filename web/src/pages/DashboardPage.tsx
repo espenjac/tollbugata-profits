@@ -6,13 +6,13 @@ import {
 } from "../core/format";
 import { describeCriteria, EXCLUSION_LABELS } from "../core/screen";
 import type { ScreenResult } from "../core/screen";
+import { marketSession, marketSessionLabel } from "../core/session";
 import { distanceToAth } from "../core/types";
 import { useAuth } from "../lib/auth-context";
 import { todayDate } from "../lib/api";
 import { useDashboard } from "../lib/useDashboard";
 import { Filters } from "../components/Filters";
 import { NewsSection } from "../components/NewsSection";
-import { OpeningPlanView } from "../components/OpeningPlanView";
 import { ReportHistory } from "../components/ReportHistory";
 import { ReportView } from "../components/ReportView";
 import { StockTable } from "../components/StockTable";
@@ -51,9 +51,6 @@ export function DashboardPage() {
   const dashboard = useDashboard(userId);
   const {
     snapshot,
-    openingSnapshot,
-    openingRefreshing,
-    openingError,
     report,
     viewedReport,
     history,
@@ -66,7 +63,6 @@ export function DashboardPage() {
     screenResult,
     setCriteria,
     refresh,
-    refreshOpening,
     viewReport,
     clearViewedReport,
   } = dashboard;
@@ -76,6 +72,7 @@ export function DashboardPage() {
   const viewingHistorical =
     viewedReport !== null && osloDateString(viewedReport.generatedAt) !== today;
   const stats = computeStats(screenResult);
+  const session = marketSession();
 
   if (loading && !activeReport && !screenResult) {
     return <LoadingView message="Henter markedsdata og bygger rapport …" />;
@@ -95,18 +92,17 @@ export function DashboardPage() {
     <div className="page dashboard-page">
       <section className="hero">
         <div className="hero-copy">
-          <p className="eyebrow">Pre-market · Oslo Børs</p>
-          <h1>Kursinformasjon</h1>
+          <p className="eyebrow">Oslo Børs · {marketSessionLabel(session)}</p>
+          <h1>Dagens rapport</h1>
           <p>
-            Screen av hele Oslo Børs, teknisk score, nyhetsvurdering og en
-            manuell handelsplan. Rapporten lages første gang appen åpnes hver
-            handledag.
+            Én oppdatert handelsplan med siste kurs, teknisk score og nyheter.
+            Bygg rapporten på nytt når du vil – også midt i handledagen.
           </p>
           <div className="hero-meta">
             {snapshot ? (
               <>
                 <span>
-                  Data hentet {formatDateTime(snapshot.universe.fetchedAt)} (
+                  Kurs hentet {formatDateTime(snapshot.universe.fetchedAt)} (
                   {sourceText(snapshot.universe.source)})
                 </span>
                 <span>
@@ -126,80 +122,18 @@ export function DashboardPage() {
             disabled={refreshing}
             onClick={() => void refresh()}
           >
-            {refreshing ? "Oppdaterer …" : "Hent på nytt"}
+            {refreshing ? "Oppdaterer …" : "Oppdater med siste kurs"}
           </button>
           <small>
-            Rapportdato {today}. Dagens rapport endres ikke ved oppdatering.
+            {today} · rapporten erstattes med en ny vurdering hver gang du
+            oppdaterer.
           </small>
         </div>
       </section>
 
-      {error ? (
-        <InlineNotice kind="error">{error}</InlineNotice>
-      ) : null}
-      {warning ? (
-        <InlineNotice kind="warning">{warning}</InlineNotice>
-      ) : null}
-      {notice ? (
-        <InlineNotice kind="success">{notice}</InlineNotice>
-      ) : null}
-
-      {activeReport && !viewingHistorical ? (
-        <OpeningPlanView
-          report={activeReport}
-          snapshot={openingSnapshot ?? snapshot}
-          refreshing={openingRefreshing}
-          error={openingError}
-          onRefresh={() => void refreshOpening()}
-        />
-      ) : null}
-
-      <section className="stats-grid" aria-label="Nøkkeltall">
-        <StatCard
-          label="Treff"
-          value={screenResult ? screenResult.matches.length : "–"}
-          hint={
-            screenResult
-              ? `av ${screenResult.universeSize} aksjer`
-              : "markedsdata mangler"
-          }
-        />
-        <StatCard
-          label="På/ved ATH"
-          value={screenResult ? screenResult.atHighCount : "–"}
-          hint="merket ATH i tabellen"
-        />
-        <StatCard
-          label="Median uke"
-          value={stats.medianWeek === null ? "–" : formatPct(stats.medianWeek)}
-          hint="blant treffene"
-          tone={
-            stats.medianWeek === null
-              ? "neutral"
-              : stats.medianWeek >= 0
-                ? "positive"
-                : "negative"
-          }
-        />
-        <StatCard
-          label="Median mot ATH"
-          value={
-            stats.medianDistance === null
-              ? "–"
-              : formatPct(stats.medianDistance)
-          }
-          hint="nærmeste kjente topp"
-        />
-        <StatCard
-          label="Skjult Growth"
-          value={
-            screenResult
-              ? (screenResult.excluded["euronext growth"] ?? 0)
-              : "–"
-          }
-          hint="kan normalt ikke holdes på ASK"
-        />
-      </section>
+      {error ? <InlineNotice kind="error">{error}</InlineNotice> : null}
+      {warning ? <InlineNotice kind="warning">{warning}</InlineNotice> : null}
+      {notice ? <InlineNotice kind="success">{notice}</InlineNotice> : null}
 
       {activeReport ? (
         <ReportView
@@ -218,27 +152,69 @@ export function DashboardPage() {
       )}
 
       {screenResult ? (
-        <>
-          <section className="panel criteria-panel">
-            <div>
-              <p className="eyebrow">Aktive kriterier</p>
-              <p>{describeCriteria(criteria)}</p>
-            </div>
-            <p className="muted">
-              Filtre påvirker tabellen og nyhetslisten. Dagens lagrede rapport
-              bruker kriteriene som var aktive da den ble laget.
-            </p>
-          </section>
+        <details className="panel screening-panel">
+          <summary>
+            <span>Screen hele Oslo Børs</span>
+            <small>
+              {screenResult.matches.length} treff av {screenResult.universeSize}
+            </small>
+          </summary>
+          <div className="screening-body">
+            <section className="stats-grid" aria-label="Nøkkeltall">
+              <StatCard
+                label="Treff"
+                value={screenResult.matches.length}
+                hint={`av ${screenResult.universeSize} aksjer`}
+              />
+              <StatCard
+                label="På/ved ATH"
+                value={screenResult.atHighCount}
+                hint="merket ATH i tabellen"
+              />
+              <StatCard
+                label="Median uke"
+                value={
+                  stats.medianWeek === null ? "–" : formatPct(stats.medianWeek)
+                }
+                hint="blant treffene"
+                tone={
+                  stats.medianWeek === null
+                    ? "neutral"
+                    : stats.medianWeek >= 0
+                      ? "positive"
+                      : "negative"
+                }
+              />
+              <StatCard
+                label="Median mot ATH"
+                value={
+                  stats.medianDistance === null
+                    ? "–"
+                    : formatPct(stats.medianDistance)
+                }
+                hint="nærmeste kjente topp"
+              />
+            </section>
 
-          <Filters criteria={criteria} onChange={setCriteria} />
-          <NewsSection news={snapshot?.news ?? null} stocks={screenResult.matches} />
-          <StockTable
-            stocks={screenResult.matches}
-            criteria={criteria}
-            today={today}
-          />
-          <Exclusions result={screenResult} />
-        </>
+            <div className="criteria-panel">
+              <div>
+                <p className="eyebrow">Aktive kriterier</p>
+                <p>{describeCriteria(criteria)}</p>
+              </div>
+            </div>
+            <Filters criteria={criteria} onChange={setCriteria} />
+            <NewsSection
+              news={snapshot?.news ?? null}
+              stocks={screenResult.matches}
+            />
+            <StockTable
+              stocks={screenResult.matches}
+              criteria={criteria}
+              today={today}
+            />
+            <Exclusions result={screenResult} />
+          </div>
+        </details>
       ) : null}
 
       <ReportHistory
@@ -275,7 +251,7 @@ function Exclusions({ result }: { result: ScreenResult }) {
     return null;
   }
   return (
-    <details className="panel exclusions">
+    <details className="exclusions">
       <summary>
         Hvorfor ble {result.universeSize - result.matches.length} aksjer
         filtrert bort?

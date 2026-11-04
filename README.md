@@ -1,9 +1,10 @@
 # Tollbugata Profits
 
-Tollbugata Profits lager en **pre-market daytrading-rapport for Oslo Børs** og
-en manuell handelsdagbok. Appen screener hele Oslo Børs, scorer kandidatene,
+Tollbugata Profits lager en **oppdatert handelsrapport for Oslo Børs** og en
+manuell handelsdagbok. Appen screener hele Oslo Børs, scorer kandidatene,
 vurderer børsmeldinger og lager en konkret plan med hele aksjer, kurtasje,
-gevinstmål, tapsgrense og scenarier.
+gevinstmål, tapsgrense og scenarier. Rapporten kan bygges på nytt når som
+helst, også midt i handledagen.
 
 Appen sender **aldri** ordrer. Den er et beslutningsstøtteverktøy, ikke
 investeringsrådgivning.
@@ -37,18 +38,18 @@ Oppsett:
 - «Ingen anbefalte kandidater i dag – vurder å stå over» når ingen er gode nok.
 - Nyhetsliste fra NewsWeb med enkel positiv/negativ/nøytral-analyse.
 - Handelsplan med hele aksjer, kurtasje, mål, stop, reward/risk og scenarier.
-- Egen kjøpssone før åpning: 0,5 × ATR rundt gårsdagens sluttkurs, begrenset
-  av rapportens stop og target. Åpning utenfor sonen betyr «stå over».
-- Egen åpningsplan som henter åpningskurs og VWAP etter børsåpning, regner
-  stop og gevinstmål på nytt fra faktisk åpning og viser om gammel plan ble
-  ugyldig etter et gap. Bruk den tidligst 09:15, helst 09:30.
-- Dagens rapport lagres første gang appen åpnes. Rapporten er uforanderlig og
-  brukes som historikk senere samme dag.
-- Filtre påvirker aksjetabellen og nyhetslisten, men endrer ikke en allerede
-  lagret rapport.
+- Standard mål er 5 % og stop 2 %, med minstekrav om 1:1 reward/risk etter
+  kurtasje. Målet kan endres i `web/src/core/config.ts`.
+- Én oppdatert rapport per dag. Knappen «Oppdater med siste kurs» henter nye
+  markedsdata og erstatter dagens rapport i stedet for å låse den til
+  før-åpning-vurderingen.
+- Når børsen er åpen, cacher Edge Function skannerdata i 30 sekunder. Utenfor
+  børstid brukes 10 minutter.
+- Screening, filtre, nyhetsliste og aksjetabell er samlet i en sammenleggbar
+  seksjon under rapporten for å redusere informasjonsmengden.
 - Handelsdagbok på `/logg` med kjøp, salg, redigering, hurtigsalg,
-  saldojustering og beholdning. Ledig kapital beregnes fra startkapital,
-  handler og justeringer.
+  saldojustering og beholdning. Åpne posisjoner viser «Selg ved» med
+  gevinstmål og stop regnet fra faktisk snittkost.
 - Mobilvennlig PWA som kan installeres på hjemskjermen.
 
 ## Viktige avgrensninger
@@ -56,7 +57,8 @@ Oppsett:
 - Bare manuell registrering. Ingen automatisk handel, ingen ordre-API.
 - Ingen JSON-filer, import/eksport eller innebygd backup i V2. All persistens
   er Supabase, og backup tas utenfor appen.
-- Ingen planlagt rapportgenerering eller cron. Rapporten lages når appen åpnes.
+- Ingen planlagt rapportgenerering eller cron. Rapporten lages når appen
+  åpnes eller når du trykker oppdater.
 - Backtest er ikke en del av V2-frontenden. Python-verktøyet beholdes som
   forskningsreferanse.
 - `market_cache` er bare tilgjengelig for service role.
@@ -94,8 +96,8 @@ hovedkandidat, score, rangering og blokkerte kandidater.
 - `trades`: logg over kjøp og salg; redigering oppdaterer raden og setter
   `updated_at`.
 - `cash_adjustments`: differansejusteringer mot bankens saldo.
-- `reports`: `payload jsonb` og `unique(user_id, report_date)`. Første rapport
-  for en lokal Oslo-dag vinner.
+- `reports`: `payload jsonb` og `unique(user_id, report_date)`. Dagens rapport
+  oppdateres med ny payload og `generated_at` ved hver oppdatering.
 - `account_balances`: derivert view for ledig kapital.
 - `market_cache`: service-role-only cache for Edge Function.
 

@@ -229,7 +229,7 @@ export interface Universe {
   growthWarning: string | null;
 }
 
-export interface PremarketReport {
+export interface MarketReport {
   generatedAt: Date;
   universeFetchedAt: Date;
   universeSource: string;
@@ -243,6 +243,7 @@ export interface PremarketReport {
   newsSince: Date | null;
   newsSource: string | null;
   dataBasis: string;
-  isPremarket: boolean;
+  /** True when the latest scanner price came from an open session. */
+  marketOpen: boolean;
   warnings: string[];
 }
