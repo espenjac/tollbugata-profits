@@ -44,8 +44,11 @@ npm run preview    # forhåndsvis produksjonsbygget
 - `src/lib/useDashboard.ts` henter markedsdata via Edge Function og bygger
   rapporten på nytt ved åpning og hver oppdatering. Dagens rad oppdateres med
   `unique(user_id, report_date)`.
+- `src/core/session.ts` avgjør om Oslo Børs er åpen, slik at rapporten kan
+  merkes med «siste handlede kurs» eller «siste sluttkurs».
 - `src/pages/JournalPage.tsx` er `/logg`. Den henter bare Supabase-data og
-  kontakter aldri markeds-API-ene.
+  kontakter aldri markeds-API-ene. Åpne posisjoner viser gevinstmål og stop
+  regnet fra faktisk snittkost.
 - Rapporthistorikk inneholder siste lagrede versjon per dato. Rapporten
   erstattes når du oppdaterer samme dag.
 
