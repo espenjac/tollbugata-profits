@@ -97,9 +97,9 @@ export function DashboardPage() {
           </p>
           <h1>Dagens rapport</h1>
           <p>
-            Én oppdatert swingplan med 2–5 handledagers horisont, siste kurs,
-            teknisk score og nyheter. Bygg rapporten på nytt når du vil – også
-            midt i handledagen.
+            Én swingplan med 2–5 handledagers horisont, bygget på nytt fra
+            ferskeste kurs, teknisk score og nyheter hver gang du åpner eller
+            oppdaterer.
           </p>
           <div className="hero-meta">
             {snapshot ? (

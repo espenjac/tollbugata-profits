@@ -6,7 +6,6 @@ import { DEFAULT_CRITERIA, screen, type Criteria } from "../core/screen";
 import type { MarketReport } from "../core/types";
 import {
   fetchMarketSnapshot,
-  loadReportByDate,
   loadReportById,
   loadReportHistory,
   loadSettings,
@@ -72,18 +71,18 @@ export function useDashboard(userId: string): DashboardState {
       const date = todayDate();
       const now = new Date();
       try {
-        const [loadedSettings, loadedJournal, loadedHistory, existingReport] =
+        const [loadedSettings, loadedJournal, loadedHistory] =
           await Promise.all([
             loadSettings(userId).catch(() => DEFAULT_SETTINGS),
             loadJournal(userId).catch(() => null),
             loadReportHistory(userId).catch(() => []),
-            loadReportByDate(userId, date),
           ]);
         setSettings(loadedSettings);
         setJournal(loadedJournal);
         setHistory(loadedHistory);
-        setReport(existingReport);
 
+        // The current report is always rebuilt from a fresh snapshot. Stored
+        // reports are only for history, never the current view.
         let freshSnapshot: MarketSnapshot | null = null;
         let snapshotWarning: string | null = null;
         try {
@@ -97,47 +96,43 @@ export function useDashboard(userId: string): DashboardState {
           setSnapshot(null);
         }
 
-        if (freshSnapshot) {
-          const result = screen(
-            freshSnapshot.universe.stocks,
-            criteriaRef.current,
-          );
-          const cash = loadedJournal ? deriveCash(loadedJournal) : 5000;
-          const reportSettings = settingsForCapital(loadedSettings, cash);
-          const built = buildMarketReport(
-            result.matches,
-            criteriaRef.current,
-            freshSnapshot.universe,
-            freshSnapshot.news,
-            reportSettings,
-            date,
-            now,
-          );
-          setReport(built);
-          try {
-            const saved = await saveReport(userId, date, built);
-            setReport(saved);
-          } catch (saveError) {
-            setWarning(
-              `Rapporten ble oppdatert i appen, men kunne ikke lagres: ${
-                saveError instanceof Error ? saveError.message : String(saveError)
-              }`,
-            );
-          }
-          setHistory(
-            await loadReportHistory(userId).catch(() => loadedHistory),
-          );
-        } else if (!existingReport) {
+        if (!freshSnapshot) {
           throw new Error(
-            `Kunne ikke hente markedsdata og det finnes ingen lagret rapport for i dag. ${snapshotWarning}`,
+            `Kunne ikke hente ferske markedsdata. ${snapshotWarning ?? ""}`.trim(),
           );
         }
 
-        if (snapshotWarning) {
+        const result = screen(
+          freshSnapshot.universe.stocks,
+          criteriaRef.current,
+        );
+        const cash = loadedJournal ? deriveCash(loadedJournal) : 5000;
+        const reportSettings = settingsForCapital(loadedSettings, cash);
+        const built = buildMarketReport(
+          result.matches,
+          criteriaRef.current,
+          freshSnapshot.universe,
+          freshSnapshot.news,
+          reportSettings,
+          date,
+          now,
+        );
+        setReport(built);
+        try {
+          const saved = await saveReport(userId, date, built);
+          setReport(saved);
+        } catch (saveError) {
           setWarning(
-            `Ferske markedsdata kunne ikke hentes (${snapshotWarning}). Viser lagret rapport for i dag.`,
+            `Rapporten ble oppdatert i appen, men kunne ikke lagres: ${
+              saveError instanceof Error ? saveError.message : String(saveError)
+            }`,
           );
-        } else if (isRefresh) {
+        }
+        setHistory(
+          await loadReportHistory(userId).catch(() => loadedHistory),
+        );
+
+        if (isRefresh) {
           setNotice("Rapporten er oppdatert med siste kurs.");
         }
         if (!loadedJournal) {
@@ -147,7 +142,7 @@ export function useDashboard(userId: string): DashboardState {
               "Handelsdagboken kunne ikke leses. Rapporten bruker standard kapital.",
           );
         }
-        return !snapshotWarning;
+        return true;
       } catch (loadError) {
         setError(
           loadError instanceof Error ? loadError.message : String(loadError),

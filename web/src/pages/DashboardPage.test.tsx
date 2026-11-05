@@ -37,7 +37,6 @@ vi.mock("../lib/api", () => ({
   loadSettings: async () => mockState.settings,
   loadJournal: async () => mockState.journal,
   loadReportHistory: async () => mockState.history,
-  loadReportByDate: async () => mockState.report,
   loadReportById: async () => mockState.report,
   fetchMarketSnapshot: async () => mockState.snapshot,
   saveReport: async () => mockState.report,
@@ -84,7 +83,7 @@ function makeData() {
 }
 
 describe("DashboardPage", () => {
-  it("renders a saved report, filters, news, stock table and history", async () => {
+  it("renders a freshly built report, filters, news, stock table and history", async () => {
     const data = makeData();
     mockState.report = data.report;
     mockState.snapshot = {
@@ -118,5 +117,23 @@ describe("DashboardPage", () => {
     expect(text).toContain("Børsmeldinger");
     expect(text).toContain("Rapporthistorikk");
     expect(container.querySelectorAll("tbody tr").length).toBeGreaterThan(0);
+  });
+
+  it("does not show a stored report when fresh market data fails", async () => {
+    const data = makeData();
+    mockState.report = data.report;
+    mockState.snapshot = null;
+    mockState.settings = DEFAULT_SETTINGS;
+    mockState.journal = data.journal;
+    mockState.history = [];
+
+    const { container } = render(<DashboardPage />);
+    await waitFor(() => {
+      expect(container.textContent).toContain("Kunne ikke laste markedet");
+    });
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("Kunne ikke hente ferske markedsdata");
+    expect(text).not.toContain("Dagens hovedkandidat");
   });
 });

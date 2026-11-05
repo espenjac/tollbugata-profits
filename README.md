@@ -44,9 +44,9 @@ Oppsett:
   posisjonen skal ut etter 5 handledager hvis målet ikke er nådd. Fredager får
   et helgeflagg. Valgene kan endres i `web/src/core/config.ts` og
   `web/src/core/swing.ts`.
-- Én oppdatert rapport per dag. Knappen «Oppdater med siste kurs» henter nye
-  markedsdata og erstatter dagens rapport i stedet for å låse den til
-  før-åpning-vurderingen.
+- Rapporten bygges alltid på nytt fra ferske markedsdata når appen åpnes eller
+  når du trykker «Oppdater med siste kurs». Lagrede rapporter brukes bare til
+  historikk, aldri som gjeldende rapport.
 - Når børsen er åpen, cacher Edge Function skannerdata i 30 sekunder. Utenfor
   børstid brukes 10 minutter.
 - Screening, filtre, nyhetsliste og aksjetabell er samlet i en sammenleggbar
@@ -62,8 +62,8 @@ Oppsett:
 - Bare manuell registrering. Ingen automatisk handel, ingen ordre-API.
 - Ingen JSON-filer, import/eksport eller innebygd backup i V2. All persistens
   er Supabase, og backup tas utenfor appen.
-- Ingen planlagt rapportgenerering eller cron. Rapporten lages når appen
-  åpnes eller når du trykker oppdater.
+- Ingen pre-market-generering, planlagt rapportgenerering eller cron. Hver
+  forespørsel bygger rapporten på nytt fra ferskeste tilgjengelige data.
 - Backtest er ikke en del av V2-frontenden. Python-verktøyet beholdes som
   forskningsreferanse.
 - `market_cache` er bare tilgjengelig for service role.

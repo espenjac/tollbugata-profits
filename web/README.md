@@ -42,7 +42,8 @@ npm run preview    # forhåndsvis produksjonsbygget
 - `src/lib/api.ts` er Supabase-klienten for rapport, historikk, innstillinger
   og dagbok. All persistens går mot Postgres.
 - `src/lib/useDashboard.ts` henter markedsdata via Edge Function og bygger
-  rapporten på nytt ved åpning og hver oppdatering. Dagens rad oppdateres med
+  rapporten på nytt ved åpning og hver oppdatering. Lagrede rapporter brukes
+  bare til historikk, aldri som gjeldende visning. Dagens rad oppdateres med
   `unique(user_id, report_date)`.
 - `src/core/session.ts` avgjør om Oslo Børs er åpen, slik at rapporten kan
   merkes med «siste handlede kurs» eller «siste sluttkurs». Edge Function
