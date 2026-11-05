@@ -45,7 +45,8 @@ npm run preview    # forhåndsvis produksjonsbygget
   rapporten på nytt ved åpning og hver oppdatering. Dagens rad oppdateres med
   `unique(user_id, report_date)`.
 - `src/core/session.ts` avgjør om Oslo Børs er åpen, slik at rapporten kan
-  merkes med «siste handlede kurs» eller «siste sluttkurs».
+  merkes med «siste handlede kurs» eller «siste sluttkurs». Edge Function
+  cacher skannerdata i 30 sekunder mens børsen er åpen.
 - `src/pages/JournalPage.tsx` er `/logg`. Den henter bare Supabase-data og
   kontakter aldri markeds-API-ene. Åpne posisjoner viser gevinstmål og stop
   regnet fra faktisk snittkost.
