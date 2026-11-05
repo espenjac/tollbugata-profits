@@ -1,4 +1,6 @@
 import type { Settings, TradeConfig } from "./config";
+import { addDaysToDateString, osloDateString, weekdayOfDateString } from "./dates";
+import { tradeLevels } from "./swing";
 
 const TICKER_RE = /^[A-Z0-9][A-Z0-9._-]{0,19}$/;
 
@@ -36,6 +38,8 @@ export interface Holding {
   quantity: number;
   costBasis: number;
   averageCost: number | null;
+  /** First buy in the current, still-open position. */
+  openedAt: string | null;
 }
 
 export interface HoldingPlan {
@@ -43,6 +47,7 @@ export interface HoldingPlan {
   targetNet: number;
   stopPrice: number;
   stopNet: number;
+  maxHoldingDays: number;
 }
 
 /** Sell levels for an actual position, using the same percentages as the report. */
@@ -54,8 +59,9 @@ export function holdingPlan(
   if (cost === null || cost <= 0 || holding.quantity <= 0) {
     return null;
   }
-  const targetPrice = cost * (1 + config.targetPct);
-  const stopPrice = cost * (1 - config.stopLossPct);
+  const levels = tradeLevels(config, null);
+  const targetPrice = cost * (1 + levels.targetPct);
+  const stopPrice = cost * (1 - levels.stopPct);
   const slippage = Math.max(0, config.slippagePct);
   const targetNet = money(
     holding.quantity * targetPrice * (1 - slippage) -
@@ -67,7 +73,45 @@ export function holdingPlan(
       holding.costBasis -
       config.sellFee,
   );
-  return { targetPrice, targetNet, stopPrice, stopNet };
+  return {
+    targetPrice,
+    targetNet,
+    stopPrice,
+    stopNet,
+    maxHoldingDays: levels.maxHoldingDays,
+  };
+}
+
+/**
+ * Trading days since the position was opened, including the buy day.
+ * Weekends are skipped; exchange holidays are not modelled.
+ */
+export function tradingDaysHeld(
+  openedAt: string | null,
+  now: Date = new Date(),
+): number | null {
+  if (openedAt === null) {
+    return null;
+  }
+  const opened = new Date(openedAt);
+  if (Number.isNaN(opened.getTime())) {
+    return null;
+  }
+  const start = osloDateString(opened);
+  const end = osloDateString(now);
+  if (end < start) {
+    return 0;
+  }
+  let date = start;
+  let days = 0;
+  for (let guard = 0; date <= end && guard < 1_000; guard += 1) {
+    const weekday = weekdayOfDateString(date);
+    if (weekday !== 0 && weekday !== 6) {
+      days += 1;
+    }
+    date = addDaysToDateString(date, 1);
+  }
+  return days;
 }
 
 export interface JournalSummary {
@@ -308,8 +352,14 @@ export function setAvailableCash(
   };
 }
 
+interface OpenPosition {
+  quantity: number;
+  cost: number;
+  openedAt: string | null;
+}
+
 export function summarizeJournal(state: JournalState): JournalSummary {
-  const positions = new Map<string, [number, number]>();
+  const positions = new Map<string, OpenPosition>();
   let realized = 0;
   let fees = 0;
   let turnover = 0;
@@ -329,45 +379,59 @@ export function summarizeJournal(state: JournalState): JournalSummary {
   for (const trade of sortedTrades) {
     fees += trade.fee;
     turnover += trade.quantity * trade.price;
-    const position = positions.get(trade.ticker) ?? [0, 0];
+    const position = positions.get(trade.ticker) ?? {
+      quantity: 0,
+      cost: 0,
+      openedAt: null,
+    };
     if (trade.side === "buy") {
       buys += 1;
-      position[0] += trade.quantity;
-      position[1] += trade.quantity * trade.price + trade.fee;
-      if (position[0] <= 0) {
-        position[1] = 0;
+      const hadPosition = position.quantity > 0;
+      position.quantity += trade.quantity;
+      position.cost += trade.quantity * trade.price + trade.fee;
+      if (!hadPosition) {
+        position.openedAt = trade.executedAt;
+      }
+      if (position.quantity <= 0) {
+        position.cost = 0;
+        position.openedAt = null;
       }
     } else {
       sells += 1;
       const proceeds = trade.quantity * trade.price - trade.fee;
-      if (position[0] > 0) {
-        const average = position[1] / position[0];
-        const costRemoved = Math.min(position[1], average * trade.quantity);
+      if (position.quantity > 0) {
+        const average = position.cost / position.quantity;
+        const costRemoved = Math.min(
+          position.cost,
+          average * trade.quantity,
+        );
         realized += proceeds - costRemoved;
-        position[0] -= trade.quantity;
-        position[1] = Math.max(0, position[1] - costRemoved);
+        position.quantity -= trade.quantity;
+        position.cost = Math.max(0, position.cost - costRemoved);
       } else {
         realized += proceeds;
-        position[0] -= trade.quantity;
+        position.quantity -= trade.quantity;
       }
-      if (position[0] <= 0) {
-        position[1] = 0;
+      if (position.quantity <= 0) {
+        position.cost = 0;
+        position.openedAt = null;
       }
     }
     positions.set(trade.ticker, position);
   }
 
   const holdings: Holding[] = Array.from(positions.entries())
-    .filter(([, position]) => Math.trunc(position[0]) !== 0)
+    .filter(([, position]) => Math.trunc(position.quantity) !== 0)
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([ticker, position]) => ({
       ticker,
-      quantity: Math.trunc(position[0]),
-      costBasis: money(position[1]),
+      quantity: Math.trunc(position.quantity),
+      costBasis: money(position.cost),
       averageCost:
-        Math.trunc(position[0]) > 0
-          ? money(position[1] / Math.trunc(position[0]))
+        Math.trunc(position.quantity) > 0
+          ? money(position.cost / Math.trunc(position.quantity))
           : null,
+      openedAt: position.openedAt,
     }));
 
   return {

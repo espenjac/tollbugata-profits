@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_SETTINGS } from "./config";
+import { DEFAULT_SETTINGS, type Settings } from "./config";
 import { parseNewsPayload } from "./news";
 import { parseScannerPayload } from "./market";
 import { DEFAULT_CRITERIA, screen } from "./screen";
@@ -9,6 +9,21 @@ import scanFixture from "./__fixtures__/scan.json";
 import newsFixture from "./__fixtures__/news.json";
 import growthFixture from "./__fixtures__/growth.json";
 import expected from "./__fixtures__/premarket.json";
+
+/** Keep the original Python parity fixture on the old day-trade rules. */
+const DAY_SETTINGS: Settings = {
+  ...DEFAULT_SETTINGS,
+  trade: {
+    ...DEFAULT_SETTINGS.trade,
+    mode: "day",
+    targetPct: 0.05,
+    stopLossPct: 0.02,
+  },
+  report: {
+    ...DEFAULT_SETTINGS.report,
+    blockEarningsWithinDays: 1,
+  },
+};
 
 function loadUniverse(): Universe {
   const growthTickers = new Set<string>(growthFixture.tickers as string[]);
@@ -56,7 +71,7 @@ describe("ported core parity with the Python implementation", () => {
       DEFAULT_CRITERIA,
       universe,
       news,
-      DEFAULT_SETTINGS,
+      DAY_SETTINGS,
       "2026-11-01",
       new Date("2026-11-01T14:07:00+01:00"),
     );

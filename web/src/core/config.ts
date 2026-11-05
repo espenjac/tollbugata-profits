@@ -43,11 +43,17 @@ export interface ScoringConfig {
   riskWeights: RiskWeights;
 }
 
+export type TradeMode = "day" | "swing";
+
 export interface TradeConfig {
   capital: number;
   buyFee: number;
   sellFee: number;
+  /** Swing is the default: 2-5 trading days, ATR-adjusted stop and target. */
+  mode: TradeMode;
+  /** Fixed day-trade target. Swing targets are derived from the ATR stop. */
   targetPct: number;
+  /** Fallback swing stop when ATR is unavailable, or the fixed day-trade stop. */
   stopLossPct: number;
   slippagePct: number;
   minRewardRisk: number;
@@ -116,11 +122,12 @@ export const DEFAULT_TRADE_CONFIG: TradeConfig = {
   capital: 5_000,
   buyFee: 29,
   sellFee: 29,
-  targetPct: 0.05,
-  stopLossPct: 0.02,
+  mode: "swing",
+  targetPct: 0.1,
+  stopLossPct: 0.05,
   slippagePct: 0,
   minRewardRisk: 1,
-  scenarioPcts: [-0.02, -0.01, 0.01, 0.02, 0.03, 0.04, 0.05],
+  scenarioPcts: [-0.06, -0.03, 0, 0.03, 0.05, 0.08, 0.1, 0.13],
 };
 
 export const DEFAULT_REPORT_CONFIG: ReportConfig = {

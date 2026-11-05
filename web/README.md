@@ -47,9 +47,11 @@ npm run preview    # forhåndsvis produksjonsbygget
 - `src/core/session.ts` avgjør om Oslo Børs er åpen, slik at rapporten kan
   merkes med «siste handlede kurs» eller «siste sluttkurs». Edge Function
   cacher skannerdata i 30 sekunder mens børsen er åpen.
+- `src/core/swing.ts` beregner ATR-basert stop og mål for swingplanen og
+  fredagens helgeflagg. Standard horisont er 2–5 handledager.
 - `src/pages/JournalPage.tsx` er `/logg`. Den henter bare Supabase-data og
   kontakter aldri markeds-API-ene. Åpne posisjoner viser gevinstmål og stop
-  regnet fra faktisk snittkost.
+  regnet fra faktisk snittkost, antall handledager og tidsstopp etter 5 dager.
 - Rapporthistorikk inneholder siste lagrede versjon per dato. Rapporten
   erstattes når du oppdaterer samme dag.
 

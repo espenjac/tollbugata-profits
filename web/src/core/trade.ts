@@ -1,26 +1,29 @@
 import type { TradeConfig } from "./config";
+import { tradeLevels } from "./swing";
 import type { TradePlan, TradeScenario } from "./types";
 
 export function buildTradePlan(
   price: number,
   config: TradeConfig,
   scenarioPcts?: Iterable<number>,
+  atrPctValue: number | null = null,
 ): TradePlan {
   if (price <= 0) {
-    return emptyPlan(config, price);
+    return emptyPlan(config, price, atrPctValue);
   }
+  const levels = tradeLevels(config, atrPctValue);
   const buyPrice = price * (1 + Math.max(0, config.slippagePct));
   const budget = Math.max(0, config.capital - config.buyFee);
   const shares = Math.floor(budget / buyPrice);
   if (shares <= 0) {
-    return emptyPlan(config, price);
+    return emptyPlan(config, price, atrPctValue);
   }
 
   const invested = shares * buyPrice;
   const totalCost = invested + config.buyFee;
   const cashLeft = config.capital - totalCost;
-  const targetPrice = buyPrice * (1 + config.targetPct);
-  const stopPrice = buyPrice * (1 - config.stopLossPct);
+  const targetPrice = buyPrice * (1 + levels.targetPct);
+  const stopPrice = buyPrice * (1 - levels.stopPct);
   const targetNet = netResult(shares, buyPrice, targetPrice, config);
   const stopNet = netResult(shares, buyPrice, stopPrice, config);
   const rewardRisk =
@@ -40,9 +43,13 @@ export function buildTradePlan(
     targetPrice,
     targetNet,
     targetReturnPct: totalCost !== 0 ? (targetNet / totalCost) * 100 : 0,
+    targetPct: levels.targetPct,
     stopPrice,
     stopNet,
     stopReturnPct: totalCost !== 0 ? (stopNet / totalCost) * 100 : 0,
+    stopPct: levels.stopPct,
+    mode: levels.mode,
+    maxHoldingDays: levels.maxHoldingDays,
     rewardRisk,
     scenarios,
     feasible: true,
@@ -83,7 +90,12 @@ function scenario(
   };
 }
 
-function emptyPlan(config: TradeConfig, price: number): TradePlan {
+function emptyPlan(
+  config: TradeConfig,
+  price: number,
+  atrPctValue: number | null,
+): TradePlan {
+  const levels = tradeLevels(config, atrPctValue);
   return {
     capital: config.capital,
     buyFee: config.buyFee,
@@ -96,9 +108,13 @@ function emptyPlan(config: TradeConfig, price: number): TradePlan {
     targetPrice: 0,
     targetNet: 0,
     targetReturnPct: 0,
+    targetPct: levels.targetPct,
     stopPrice: 0,
     stopNet: 0,
     stopReturnPct: 0,
+    stopPct: levels.stopPct,
+    mode: levels.mode,
+    maxHoldingDays: levels.maxHoldingDays,
     rewardRisk: null,
     scenarios: [],
     feasible: false,

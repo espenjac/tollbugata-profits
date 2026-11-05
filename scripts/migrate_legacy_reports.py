@@ -75,6 +75,7 @@ DEFAULT_TRADE = {
     "capital": 5000.0,
     "buyFee": 29.0,
     "sellFee": 29.0,
+    "mode": "day",
     "targetPct": 0.05,
     "stopLossPct": 0.02,
     "slippagePct": 0.0,

@@ -6,6 +6,7 @@ import {
   summarizeJournal,
   tradeCashChange,
   tradeSideLabel,
+  tradingDaysHeld,
   type Holding,
   type TradeEntry,
   type TradeInput,
@@ -381,7 +382,8 @@ export function JournalPage() {
                 Gevinstmål for {selectedHolding?.ticker}:{" "}
                 <strong>{formatPrice(selectedPlan.targetPrice)} kr</strong>{" "}
                 (netto {formatMoney(selectedPlan.targetNet, 0, true)} etter
-                kurtasje). Kursen er forhåndsutfylt med målet – endre til
+                kurtasje). Tidsstopp etter {selectedPlan.maxHoldingDays}{" "}
+                handledager. Kursen er forhåndsutfylt med målet – endre til
                 faktisk salgskurs.
               </div>
             ) : null}
@@ -552,6 +554,7 @@ export function JournalPage() {
                   <th className="num">Antall</th>
                   <th className="num">Snittkost</th>
                   <th className="num">Kostbasis</th>
+                  <th className="num">Holdt</th>
                   <th className="num">Selg ved</th>
                   <th />
                 </tr>
@@ -559,6 +562,11 @@ export function JournalPage() {
               <tbody>
                 {summary.holdings.map((holding) => {
                   const plan = holdingPlan(holding, DEFAULT_SETTINGS.trade);
+                  const held = tradingDaysHeld(holding.openedAt);
+                  const overdue =
+                    held !== null &&
+                    plan !== null &&
+                    held >= plan.maxHoldingDays;
                   return (
                     <tr key={holding.ticker}>
                       <td data-label="Ticker">{holding.ticker}</td>
@@ -572,6 +580,19 @@ export function JournalPage() {
                       </td>
                       <td data-label="Kostbasis" className="num">
                         {formatMoney(holding.costBasis, 2)}
+                      </td>
+                      <td data-label="Holdt" className="num">
+                        {held === null ? (
+                          "–"
+                        ) : (
+                          <span
+                            className={`holding-age${overdue ? " negative" : ""}`}
+                          >
+                            {held}
+                            {plan === null ? "" : `/${plan.maxHoldingDays}`} d
+                            {overdue ? <small>tidsstopp</small> : null}
+                          </span>
+                        )}
                       </td>
                       <td data-label="Selg ved" className="num">
                         {plan === null ? (

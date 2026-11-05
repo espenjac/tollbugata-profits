@@ -3,7 +3,8 @@ import { daysUntil } from "./dates";
 import { formatDateTime, formatMoney, formatPct } from "./format";
 import type { NewsFeed } from "./news";
 import { marketSession } from "./session";
-import { isNegativeSignal } from "./types";
+import { weekendFlag } from "./swing";
+import { atrPct, isNegativeSignal } from "./types";
 import type { Criteria } from "./screen";
 import { rankCandidates } from "./strategy";
 import type { Candidate } from "./types";
@@ -56,19 +57,28 @@ function blockReasons(
   if (candidate.categories.length === 0) {
     values.push("ingen tydelig kategori (momentum, breakout eller nyheter)");
   }
+  if (
+    settings.trade.mode === "swing" &&
+    (candidate.stock.sma50 === null ||
+      candidate.stock.close <= candidate.stock.sma50)
+  ) {
+    values.push("ikke over SMA50 (svak langsiktig trend)");
+  }
   if (report.blockNegativeNews && isNegativeSignal(candidate.newsSignal)) {
     values.push("negativt nyhetssignal");
   }
+  // A swing position can be held for five trading days, so widen the
+  // earnings blackout in swing mode without changing day-trade behavior.
+  const earningsWindow =
+    settings.trade.mode === "swing"
+      ? Math.max(report.blockEarningsWithinDays, 3)
+      : report.blockEarningsWithinDays;
   const earnings = daysUntil(candidate.stock.earningsDate, today);
-  if (
-    earnings !== null &&
-    earnings >= 0 &&
-    earnings <= report.blockEarningsWithinDays
-  ) {
-    if (report.blockEarningsWithinDays <= 1) {
+  if (earnings !== null && earnings >= 0 && earnings <= earningsWindow) {
+    if (earningsWindow <= 1) {
       values.push("resultat i dag eller i morgen");
     } else {
-      values.push(`resultat innen ${report.blockEarningsWithinDays} dager`);
+      values.push(`resultat innen ${earningsWindow} dager`);
     }
   }
   const exDate = daysUntil(candidate.stock.exDividendDate, today);
@@ -104,7 +114,12 @@ export function buildMarketReport(
     settings.scoring,
   );
   const planned: PlannedCandidate[] = ranked.map((candidate) => {
-    const trade = buildTradePlan(candidate.stock.close, settings.trade);
+    const trade = buildTradePlan(
+      candidate.stock.close,
+      settings.trade,
+      undefined,
+      atrPct(candidate.stock),
+    );
     const reasons = blockReasons(candidate, trade, settings, today);
     return {
       candidate,
@@ -165,9 +180,17 @@ export function buildMarketReport(
         `${formatMoney(main.trade.capital)} kapital og ` +
         `${formatMoney(main.trade.buyFee + main.trade.sellFee)} i kurtasje ` +
         `spiser kostnadene en stor del av et ` +
-        `${formatPct(settings.trade.targetPct, 1, false)} mål; vurder et ` +
+        `${formatPct(
+          main.trade.targetPct ?? settings.trade.targetPct,
+          1,
+          false,
+        )} mål; vurder et ` +
         `høyere mål eller la handelen være.`,
     );
+  }
+  const helgeflagg = main !== null ? weekendFlag(now) : null;
+  if (helgeflagg !== null) {
+    warnings.push(helgeflagg);
   }
   const marketOpen = marketSession(now) === "open";
   const dataBasis =
@@ -175,7 +198,10 @@ export function buildMarketReport(
     (news !== null
       ? ` og NewsWeb til ${formatDateTime(news.fetchedAt)}`
       : " uten nyhetshenting") +
-    ". Score bruker daglige data; kurs og handelsplan bruker siste handlede kurs.";
+    ". Score bruker daglige data; kurs og handelsplan bruker siste handlede kurs." +
+    (settings.trade.mode === "swing"
+      ? " Swingplanen har 2–5 handledagers horisont."
+      : "");
 
   return {
     generatedAt: now,

@@ -62,7 +62,15 @@ describe("dashboard components", () => {
     expect(text).toContain(`Anbefalte alternativer (${report.alternatives.length})`);
     expect(text).toContain(`Ikke anbefalte kandidater (${report.blocked.length})`);
     expect(text).toContain("Gevinst- og tapsscenarioer");
+    expect(text).toContain("SWING");
+    expect(text).toContain("Swingplan:");
     expect(text).toContain("Rapporten utfører ingen");
+    expect(report.main?.trade.mode).toBe("swing");
+    expect(report.main?.trade.maxHoldingDays).toBe(5);
+    expect(report.main?.trade.stopPct).toBeGreaterThanOrEqual(0.04);
+    expect(report.main?.trade.stopPct).toBeLessThanOrEqual(0.06);
+    expect(report.main?.trade.targetPct).toBeGreaterThanOrEqual(0.08);
+    expect(report.main?.trade.targetPct).toBeLessThanOrEqual(0.1);
   });
 
   it("renders the screened stock table with sorting and Nordnet links", () => {

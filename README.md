@@ -38,8 +38,12 @@ Oppsett:
 - «Ingen anbefalte kandidater i dag – vurder å stå over» når ingen er gode nok.
 - Nyhetsliste fra NewsWeb med enkel positiv/negativ/nøytral-analyse.
 - Handelsplan med hele aksjer, kurtasje, mål, stop, reward/risk og scenarier.
-- Standard mål er 5 % og stop 2 %, med minstekrav om 1:1 reward/risk etter
-  kurtasje. Målet kan endres i `web/src/core/config.ts`.
+- Standard er swingplan med 2–5 handledager. Stopen settes til 1,2 × ATR,
+  begrenset til 4–6 %, og målet til 1,8 × stop, begrenset til 8–10 %.
+  Planen sier også at stopen skal flyttes opp, trail under høyeste kurs, og at
+  posisjonen skal ut etter 5 handledager hvis målet ikke er nådd. Fredager får
+  et helgeflagg. Valgene kan endres i `web/src/core/config.ts` og
+  `web/src/core/swing.ts`.
 - Én oppdatert rapport per dag. Knappen «Oppdater med siste kurs» henter nye
   markedsdata og erstatter dagens rapport i stedet for å låse den til
   før-åpning-vurderingen.
@@ -49,7 +53,8 @@ Oppsett:
   seksjon under rapporten for å redusere informasjonsmengden.
 - Handelsdagbok på `/logg` med kjøp, salg, redigering, hurtigsalg,
   saldojustering og beholdning. Åpne posisjoner viser «Selg ved» med
-  gevinstmål og stop regnet fra faktisk snittkost.
+  gevinstmål og stop regnet fra faktisk snittkost, hvor mange handledager
+  posisjonen er holdt, og et tidsstopp-varsel etter 5 handledager.
 - Mobilvennlig PWA som kan installeres på hjemskjermen.
 
 ## Viktige avgrensninger

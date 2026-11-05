@@ -1,3 +1,5 @@
+import type { TradeMode } from "./config";
+
 export const ATH_DISTORTION_RATIO = 50;
 
 export type Market = "oslo" | "euronext_growth";
@@ -204,9 +206,15 @@ export interface TradePlan {
   targetPrice: number;
   targetNet: number;
   targetReturnPct: number;
+  /** Effective plan percentage. Optional for reports stored before swing mode. */
+  targetPct?: number;
   stopPrice: number;
   stopNet: number;
   stopReturnPct: number;
+  /** Effective plan percentage. Optional for reports stored before swing mode. */
+  stopPct?: number;
+  mode?: TradeMode;
+  maxHoldingDays?: number;
   rewardRisk: number | null;
   scenarios: TradeScenario[];
   feasible: boolean;

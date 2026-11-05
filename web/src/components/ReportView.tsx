@@ -257,6 +257,11 @@ function CandidateCard({
           ATH
         </span>
       ) : null}
+      {planned.trade.mode === "swing" ? (
+        <span className="badge" title="Swingplan: 2–5 handledager">
+          SWING
+        </span>
+      ) : null}
       <CategoryChips categories={candidate.categories} />
     </div>
   );
@@ -337,6 +342,10 @@ function CandidateDetails({
   const stock = candidate.stock;
   const trade = planned.trade;
   const settings = report.settings;
+  const targetPct = trade.targetPct ?? settings.trade.targetPct;
+  const stopPct = trade.stopPct ?? settings.trade.stopLossPct;
+  const maxHoldingDays = trade.maxHoldingDays ?? 5;
+  const swing = trade.mode === "swing";
   const newsItems = news ? uniqueNews(forStock(news, stock), 3) : [];
   const today = osloDateString(report.generatedAt);
   const earningsText = stock.earningsDate
@@ -391,16 +400,18 @@ function CandidateDetails({
           <span>Gevinstmål</span>
           <strong>{formatPrice(trade.targetPrice)} kr</strong>
           <small>
-            {formatPct(settings.trade.targetPct)} · netto{" "}
+            {formatPct(targetPct)} · netto{" "}
             {formatMoney(trade.targetNet, 0, true)}
+            {swing ? ` · hold ${maxHoldingDays} d` : ""}
           </small>
         </div>
         <div>
           <span>Tapsgrense</span>
           <strong>{formatPrice(trade.stopPrice)} kr</strong>
           <small>
-            {formatPct(-settings.trade.stopLossPct)} · netto{" "}
+            {formatPct(-stopPct)} · netto{" "}
             {formatMoney(trade.stopNet, 0, true)}
+            {swing ? " · trailing" : ""}
           </small>
         </div>
         <div>
@@ -413,6 +424,15 @@ function CandidateDetails({
           <small>etter kurtasje</small>
         </div>
       </div>
+
+      {swing ? (
+        <div className="swing-note">
+          <strong>Swingplan:</strong> hold i 2–{maxHoldingDays} handledager.
+          Flytt stopen opp etter hvert som kursen stiger, aldri ned, og trail
+          den under høyeste kurs. Selg hvis planen ikke har nådd målet innen{" "}
+          {maxHoldingDays} handledager.
+        </div>
+      ) : null}
 
       <div className="report-cols">
         <div>

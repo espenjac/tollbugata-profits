@@ -990,6 +990,21 @@ details.candidate-card[open] > summary::after {
   margin-top: 0.4rem;
 }
 
+.swing-note {
+  margin-top: 0.65rem;
+  padding: 0.65rem 0.8rem;
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--bg-soft);
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.swing-note strong {
+  color: var(--text-strong);
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -1634,6 +1649,19 @@ th button.sort-active {
 .trade-price small {
   color: var(--muted);
   font-size: 0.66rem;
+}
+
+.holding-age {
+  display: inline-grid;
+  gap: 0.05rem;
+  justify-items: end;
+}
+
+.holding-age small {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 
 .inline-hint {
