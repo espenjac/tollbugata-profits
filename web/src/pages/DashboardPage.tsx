@@ -92,11 +92,14 @@ export function DashboardPage() {
     <div className="page dashboard-page">
       <section className="hero">
         <div className="hero-copy">
-          <p className="eyebrow">Oslo Børs · {marketSessionLabel(session)}</p>
+          <p className="eyebrow">
+            Oslo Børs · {marketSessionLabel(session)} · Swing 2–5 dager
+          </p>
           <h1>Dagens rapport</h1>
           <p>
-            Én oppdatert handelsplan med siste kurs, teknisk score og nyheter.
-            Bygg rapporten på nytt når du vil – også midt i handledagen.
+            Én oppdatert swingplan med 2–5 handledagers horisont, siste kurs,
+            teknisk score og nyheter. Bygg rapporten på nytt når du vil – også
+            midt i handledagen.
           </p>
           <div className="hero-meta">
             {snapshot ? (

@@ -63,6 +63,7 @@ describe("dashboard components", () => {
     expect(text).toContain(`Ikke anbefalte kandidater (${report.blocked.length})`);
     expect(text).toContain("Gevinst- og tapsscenarioer");
     expect(text).toContain("SWING");
+    expect(text).toContain("Swingrapport · 2–5 dager");
     expect(text).toContain("Swingplan:");
     expect(text).toContain("Rapporten utfører ingen");
     expect(report.main?.trade.mode).toBe("swing");

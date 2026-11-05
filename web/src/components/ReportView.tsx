@@ -40,6 +40,11 @@ export function ReportView({
       }
     }
   }
+  const swingPlan =
+    report.settings.trade.mode === "swing" ||
+    report.main?.trade.mode === "swing";
+  const legacyPlan =
+    !historical && report.main !== null && report.main.trade.mode === undefined;
 
   return (
     <section className="panel report" aria-label="Dagens rapport">
@@ -66,7 +71,9 @@ export function ReportView({
           </p>
         </div>
         <div className="report-stamp">
-          <span>Rapport oppdatert</span>
+          <span>
+            {swingPlan ? "Swingrapport · 2–5 dager" : "Rapport oppdatert"}
+          </span>
           <strong>{formatDateTime(report.generatedAt)}</strong>
           <small>
             {report.marketOpen ? "siste handlede kurs" : "siste sluttkurs"}
@@ -82,6 +89,13 @@ export function ReportView({
             </InlineNotice>
           ))}
         </div>
+      ) : null}
+
+      {legacyPlan ? (
+        <InlineNotice kind="warning">
+          Denne rapporten ble laget før swing-modus. Trykk «Oppdater med siste
+          kurs» for å lage en ny swingplan.
+        </InlineNotice>
       ) : null}
 
       {report.main === null ? (
