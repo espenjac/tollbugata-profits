@@ -126,8 +126,8 @@ Journal-skriptet bruker `STARTING_CASH=5000` som standard og importerer ikke
 null-justeringen i den gamle filen. Rapport-skriptet konverterer Python-formatet
 (snake_case og prosenttall) til V2-formatet (camelCase og desimaltall) og
 beholder rapportdatoen i Oslo-tid. Kjør det etter at første V2-rapport er
-opprettet, eller før; rapporten for en dato oppdateres hvis du senere trykker
-«Oppdater med siste kurs» i appen.
+opprettet, eller før; rapporten for en dato oppdateres hvis du senere laster
+siden på nytt i appen.
 
 ## Gratisnivå
 

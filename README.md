@@ -45,8 +45,8 @@ Oppsett:
   et helgeflagg. Valgene kan endres i `web/src/core/config.ts` og
   `web/src/core/swing.ts`.
 - Rapporten bygges alltid på nytt fra ferske markedsdata når appen åpnes eller
-  når du trykker «Oppdater med siste kurs». Lagrede rapporter brukes bare til
-  historikk, aldri som gjeldende rapport.
+  når du laster siden på nytt. Lagrede rapporter brukes bare til historikk,
+  aldri som gjeldende rapport.
 - **Etrade-modus** på `/etrade` er en egen fane med kortsiktige long-ideer i
   samme stil: «kjøp over»-trigger, stop, tre delmål, ugyldig-nivå og
   posisjonsstørrelse. Ideene bruker ATR-basert stop på 3–5 %, mål på 2R/3,5R/5R

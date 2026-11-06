@@ -112,6 +112,7 @@ describe("DashboardPage", () => {
     const text = container.textContent ?? "";
     expect(text).toContain("Dagens rapport");
     expect(text).toContain("Swing 2–5 dager");
+    expect(text).not.toContain("Oppdater med siste kurs");
     expect(text).toContain(data.report.main?.candidate.stock.ticker ?? "");
     expect(text).toContain("Filtre");
     expect(text).toContain("Børsmeldinger");

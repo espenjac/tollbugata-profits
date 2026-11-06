@@ -35,7 +35,8 @@ export function LoginPage() {
         <h1>Tollbugata Profits</h1>
         <p className="auth-lead">
           Teknisk screening, nyhetsvurdering og manuell handelsplan for Oslo
-          Børs. Oppdater rapporten når du vil, og registrer handler manuelt.
+          Børs. Rapporten bygges på nytt når du laster siden på nytt, og du
+          registrerer handler manuelt.
         </p>
         {busy ? (
           <LoadingView message="Sender deg til Google …" />

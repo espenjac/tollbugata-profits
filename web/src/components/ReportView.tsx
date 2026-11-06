@@ -93,8 +93,8 @@ export function ReportView({
 
       {legacyPlan ? (
         <InlineNotice kind="warning">
-          Denne rapporten ble laget før swing-modus. Trykk «Oppdater med siste
-          kurs» for å lage en ny swingplan.
+          Denne rapporten ble laget før swing-modus. Last siden på nytt for å
+          lage en ny swingplan.
         </InlineNotice>
       ) : null}
 
@@ -522,8 +522,8 @@ function CandidateDetails({
         </p>
       </details>
       <p className="report-note">
-        Planen er beregnet fra siste tilgjengelige kurs. Oppdater rett før du
-        handler – kursen kan ha endret seg. Rapporten sender ingen ordrer.
+        Planen er beregnet fra siste tilgjengelige kurs. Sjekk kursen rett før
+        du handler – den kan ha endret seg. Rapporten sender ingen ordrer.
       </p>
     </div>
   );

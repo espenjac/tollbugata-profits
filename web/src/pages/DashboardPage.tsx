@@ -56,7 +56,6 @@ export function DashboardPage() {
     history,
     criteria,
     loading,
-    refreshing,
     error,
     warning,
     notice,
@@ -99,7 +98,7 @@ export function DashboardPage() {
           <p>
             Én swingplan med 2–5 handledagers horisont, bygget på nytt fra
             ferskeste kurs, teknisk score og nyheter hver gang du åpner eller
-            oppdaterer.
+            laster siden på nytt.
           </p>
           <div className="hero-meta">
             {snapshot ? (
@@ -119,17 +118,9 @@ export function DashboardPage() {
           </div>
         </div>
         <div className="hero-actions">
-          <button
-            className="btn btn-primary"
-            type="button"
-            disabled={refreshing}
-            onClick={() => void refresh()}
-          >
-            {refreshing ? "Oppdaterer …" : "Oppdater med siste kurs"}
-          </button>
           <small>
-            {today} · rapporten erstattes med en ny vurdering hver gang du
-            oppdaterer.
+            {today} · rapporten bygges på nytt fra ferskeste kurs når du laster
+            siden på nytt.
           </small>
         </div>
       </section>
