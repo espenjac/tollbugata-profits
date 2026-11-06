@@ -50,6 +50,13 @@ npm run preview    # forhåndsvis produksjonsbygget
   cacher skannerdata i 30 sekunder mens børsen er åpen.
 - `src/core/swing.ts` beregner ATR-basert stop og mål for swingplanen og
   fredagens helgeflagg. Standard horisont er 2–5 handledager.
+- `src/core/etrade.ts` bygger de kortsiktige Etrade-ideene. Hver ide får en
+  breakout/pullback-trigger, stop på 3–5 % (1 × ATR), tre delmål på 2R/3,5R/5R,
+  nettoresultat etter kurtasje og en «ugyldig under»-linje. Ideer som bryter
+  risiko- eller likviditetsregler flyttes til «På radaren».
+- `src/pages/EtradePage.tsx` er `/etrade` med egen fane i hovedmenyen. Siden
+  bruker `src/lib/useEtrade.ts`, som alltid henter et ferskt snapshot og aldri
+  lagrer ideene som en dagsrapport.
 - `src/pages/JournalPage.tsx` er `/logg`. Den henter bare Supabase-data og
   kontakter aldri markeds-API-ene. Åpne posisjoner viser gevinstmål og stop
   regnet fra faktisk snittkost, antall handledager og tidsstopp etter 5 dager.

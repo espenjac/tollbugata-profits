@@ -47,6 +47,13 @@ Oppsett:
 - Rapporten bygges alltid på nytt fra ferske markedsdata når appen åpnes eller
   når du trykker «Oppdater med siste kurs». Lagrede rapporter brukes bare til
   historikk, aldri som gjeldende rapport.
+- **Etrade-modus** på `/etrade` er en egen fane med kortsiktige long-ideer i
+  samme stil: «kjøp over»-trigger, stop, tre delmål, ugyldig-nivå og
+  posisjonsstørrelse. Ideene bruker ATR-basert stop på 3–5 %, mål på 2R/3,5R/5R
+  og horisont 1–3 handledager. Kandidater som er overopphetet, har negativt
+  nyhetsbilde, resultat innen to dager eller mål som ikke dekker kurtasjen,
+  havner på «På radaren» i stedet for i de klare ideene. Etrade-ideene lagres
+  ikke som historikk og bygges på nytt fra ferskeste kurs hver gang.
 - Når børsen er åpen, cacher Edge Function skannerdata i 30 sekunder. Utenfor
   børstid brukes 10 minutter.
 - Screening, filtre, nyhetsliste og aksjetabell er samlet i en sammenleggbar

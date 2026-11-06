@@ -4,6 +4,7 @@ import { LoginPage } from "./components/LoginPage";
 import { LoadingView } from "./components/ui";
 import { useAuth } from "./lib/auth-context";
 import { DashboardPage } from "./pages/DashboardPage";
+import { EtradePage } from "./pages/EtradePage";
 import { JournalPage } from "./pages/JournalPage";
 
 function routerBasename(): string | undefined {
@@ -33,6 +34,7 @@ export default function App() {
       <AppShell>
         <Routes>
           <Route path="/" element={<DashboardPage />} />
+          <Route path="/etrade" element={<EtradePage />} />
           <Route path="/logg" element={<JournalPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

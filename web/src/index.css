@@ -1005,6 +1005,183 @@ details.candidate-card[open] > summary::after {
   color: var(--text-strong);
 }
 
+/* Etrade mode */
+
+.etrade-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.etrade-summary-item {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+}
+
+.etrade-summary-item span,
+.etrade-summary-item small {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.etrade-summary-item strong {
+  color: var(--text-strong);
+  font-size: 1.2rem;
+  letter-spacing: -0.03em;
+}
+
+.etrade-score {
+  display: grid;
+  justify-items: end;
+  gap: 0.05rem;
+  min-width: 6rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid rgba(56, 214, 176, 0.36);
+  border-radius: var(--radius-sm);
+  background: rgba(56, 214, 176, 0.08);
+  text-align: right;
+}
+
+.etrade-score span,
+.etrade-score small {
+  color: var(--muted);
+  font-size: 0.66rem;
+}
+
+.etrade-score strong {
+  color: var(--accent-strong);
+  font-size: 1.3rem;
+  letter-spacing: -0.04em;
+}
+
+.etrade-levels {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+}
+
+.etrade-level {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.65rem 0.7rem;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  min-width: 0;
+}
+
+.etrade-level span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.etrade-level strong {
+  color: var(--text-strong);
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.etrade-level small {
+  color: var(--muted);
+  font-size: 0.65rem;
+  line-height: 1.35;
+}
+
+.etrade-level-entry {
+  border-color: rgba(56, 214, 176, 0.4);
+  background: rgba(56, 214, 176, 0.07);
+}
+
+.etrade-level-entry strong {
+  color: var(--accent-strong);
+}
+
+.etrade-level-stop {
+  border-color: rgba(255, 116, 132, 0.35);
+  background: rgba(255, 116, 132, 0.06);
+}
+
+.etrade-level-stop strong {
+  color: #ffc3ca;
+}
+
+.etrade-level-target strong {
+  color: var(--positive);
+}
+
+.etrade-position {
+  margin-top: 0.5rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.etrade-plan-note {
+  margin-top: 0.55rem;
+  padding: 0.65rem 0.8rem;
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--bg-soft);
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.etrade-plan-note strong {
+  color: var(--text-strong);
+}
+
+.etrade-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+}
+
+.etrade-checks .chip {
+  gap: 0.25rem;
+}
+
+.etrade-checks .chip.check-ok {
+  border-color: rgba(56, 214, 176, 0.35);
+  color: var(--accent-strong);
+}
+
+.etrade-checks .chip.check-fail {
+  border-color: rgba(255, 116, 132, 0.35);
+  color: #ffc3ca;
+}
+
+.etrade-rules {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.6rem 0 0;
+  padding-left: 1.2rem;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.etrade-rules li::marker {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.etrade-watchlist {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.etrade-guide {
+  display: grid;
+  gap: 0.2rem;
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -1758,6 +1935,14 @@ th button.sort-active {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .etrade-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .etrade-levels {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .journal-grid {
     grid-template-columns: 1fr;
   }
@@ -1892,6 +2077,21 @@ th button.sort-active {
   .score-row {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.35rem;
+    width: 100%;
+  }
+
+  .etrade-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .etrade-levels {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .etrade-score {
+    justify-items: start;
+    text-align: left;
+    min-width: 0;
     width: 100%;
   }
 
@@ -2226,9 +2426,17 @@ th button.sort-active {
     gap: 0.2rem;
   }
 
+  .main-nav {
+    gap: 0.1rem;
+  }
+
   .main-nav a {
-    padding: 0.45rem 0.35rem;
-    font-size: 0.82rem;
+    padding: 0.45rem 0.25rem;
+    font-size: 0.72rem;
+  }
+
+  .etrade-levels {
+    grid-template-columns: 1fr;
   }
 
   .score-box {

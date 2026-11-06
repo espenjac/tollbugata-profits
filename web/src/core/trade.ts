@@ -24,8 +24,8 @@ export function buildTradePlan(
   const cashLeft = config.capital - totalCost;
   const targetPrice = buyPrice * (1 + levels.targetPct);
   const stopPrice = buyPrice * (1 - levels.stopPct);
-  const targetNet = netResult(shares, buyPrice, targetPrice, config);
-  const stopNet = netResult(shares, buyPrice, stopPrice, config);
+  const targetNet = netTradeResult(shares, buyPrice, targetPrice, config);
+  const stopNet = netTradeResult(shares, buyPrice, stopPrice, config);
   const rewardRisk =
     stopNet < 0 && targetNet > 0 ? targetNet / Math.abs(stopNet) : null;
   const pcts = scenarioPcts !== undefined ? Array.from(scenarioPcts) : config.scenarioPcts;
@@ -56,7 +56,12 @@ export function buildTradePlan(
   };
 }
 
-function netResult(
+/**
+ * Net result after both fees and any configured slippage. Exported so custom
+ * trade plans (for example Etrade levels) use exactly the same cost model as
+ * the swing and day plans.
+ */
+export function netTradeResult(
   shares: number,
   buyPrice: number,
   sellPrice: number,
@@ -79,7 +84,7 @@ function scenario(
 ): TradeScenario {
   const exitPrice = buyPrice * (1 + change);
   const grossProfit = shares * (exitPrice - buyPrice);
-  const netProfit = netResult(shares, buyPrice, exitPrice, config);
+  const netProfit = netTradeResult(shares, buyPrice, exitPrice, config);
   const totalCost = shares * buyPrice + config.buyFee;
   return {
     changePct: change,
@@ -134,7 +139,7 @@ export function simulateNet(
   if (shares <= 0) {
     return { shares: 0, net: 0, netReturnPct: 0 };
   }
-  const net = netResult(shares, buyPrice, exitPrice, config);
+  const net = netTradeResult(shares, buyPrice, exitPrice, config);
   const totalCost = shares * buyPrice + config.buyFee;
   return {
     shares,
