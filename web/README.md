@@ -53,7 +53,8 @@ npm run preview    # forhåndsvis produksjonsbygget
 - `src/core/etrade.ts` bygger de kortsiktige Etrade-ideene. Hver ide får en
   breakout/pullback-trigger, stop på 3–5 % (1 × ATR), tre delmål på 2R/3,5R/5R,
   nettoresultat etter kurtasje og en «ugyldig under»-linje. Ideer som bryter
-  risiko- eller likviditetsregler flyttes til «På radaren».
+  risiko- eller likviditetsregler flyttes til «På radaren». Modusen er long
+  only; short-ideer er bevisst ikke en del av appen.
 - `src/pages/EtradePage.tsx` er `/etrade` med egen fane i hovedmenyen. Siden
   bruker `src/lib/useEtrade.ts`, som alltid henter et ferskt snapshot og aldri
   lagrer ideene som en dagsrapport.

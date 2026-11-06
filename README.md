@@ -53,7 +53,8 @@ Oppsett:
   og horisont 1–3 handledager. Kandidater som er overopphetet, har negativt
   nyhetsbilde, resultat innen to dager eller mål som ikke dekker kurtasjen,
   havner på «På radaren» i stedet for i de klare ideene. Etrade-ideene lagres
-  ikke som historikk og bygges på nytt fra ferskeste kurs hver gang.
+  ikke som historikk og bygges på nytt fra ferskeste kurs hver gang. Modusen er
+  long only; short-ideer er bevisst ikke en del av appen.
 - Når børsen er åpen, cacher Edge Function skannerdata i 30 sekunder. Utenfor
   børstid brukes 10 minutter.
 - Screening, filtre, nyhetsliste og aksjetabell er samlet i en sammenleggbar
