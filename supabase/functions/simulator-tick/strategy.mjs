@@ -787,6 +787,16 @@ function marketSession(now = /* @__PURE__ */ new Date()) {
 	if (minutes <= 990) return "open";
 	return "closed";
 }
+/**
+* True once the Oslo session has been open for the simulator's warm-up delay.
+* The cron job also gates on 09:05 Oslo time; this keeps a manual or retried
+* tick from trading on the previous close at 09:00.
+*/
+function simulatorMayTick(now = /* @__PURE__ */ new Date()) {
+	if (marketSession(now) !== "open") return false;
+	const parts = osloParts(now);
+	return parts.hour * 60 + parts.minute >= 545;
+}
 // src/core/types.ts
 function turnover(stock) {
 	if (stock.volume === null) return null;
@@ -2671,4 +2681,4 @@ function parseMarketSnapshot(data, now = /* @__PURE__ */ new Date()) {
 		generatedAt: data.generatedAt ? new Date(data.generatedAt) : now
 	};
 }
-export { DEFAULT_SETTINGS, SIM_STARTING_CASH, emptyPortfolioState, marketSession, mergeSettings, osloDateString, parseMarketSnapshot, runSimulatorTick };
+export { DEFAULT_SETTINGS, SIM_STARTING_CASH, emptyPortfolioState, marketSession, mergeSettings, osloDateString, parseMarketSnapshot, runSimulatorTick, simulatorMayTick };

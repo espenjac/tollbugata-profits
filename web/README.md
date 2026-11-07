@@ -70,9 +70,9 @@ npm run preview    # forhåndsvis produksjonsbygget
 - `src/pages/SimulatorPage.tsx` er `/simulator`. Den viser begge porteføljene,
   en graf fra `sim_equity_daily` og separate kjøp/salg-tabs per modus.
   `src/lib/useSimulator.ts` oppdaterer visningen hvert minutt; selve
-  papirhandelen kjøres av `pg_cron` hvert tiende minutt på handledager, og
-  kalenderfunksjonen `oslo_market_open_day` holder jobben borte på helger og
-  norske helligdager.
+  papirhandelen kjøres av `pg_cron` hvert tiende minutt på handledager fra
+  09:05, og kalenderfunksjonen `oslo_market_open_day` holder jobben borte på
+  helger og norske helligdager.
 - Rapporthistorikk inneholder siste lagrede versjon per dato. Rapporten
   erstattes når du oppdaterer samme dag.
 

@@ -38,6 +38,8 @@ papirhandel og den idempotente `apply_simulator_tick`-funksjonen.
 `0004_simulator_cron.sql` aktiverer `pg_cron`/`pg_net` og planlegger
 simulatorkjøringen. `0005_market_calendar.sql` legger til kalenderfunksjonen
 som begrenser jobben til faktiske handledager på Oslo Børs.
+`0006_simulator_open_delay.sql` flytter første kjøring til 09:05, slik at
+åpningsauksjonen er ferdig før simulatoren bruker en kurs.
 
 ## 3. Google-innlogging
 
@@ -137,8 +139,10 @@ sender aldri ordrer til en megler.
    );
    ```
 
-5. `0004_simulator_cron.sql` oppretter jobben og `0005_market_calendar.sql`
-   begrenser den til faktiske handledager. Kontroller den:
+5. `0004_simulator_cron.sql` oppretter jobben, `0005_market_calendar.sql`
+   begrenser den til faktiske handledager, og
+   `0006_simulator_open_delay.sql` flytter første kjøring til 09:05.
+   Kontroller den:
 
    ```sql
    select jobid, jobname, schedule, active
@@ -151,14 +155,15 @@ sender aldri ordrer til en megler.
    limit 10;
    ```
 
-Jobben kjører `*/10 6-16 * * 1-5` UTC, men kaller bare Edge Function når
-`public.oslo_market_open_day(...)` sier at datoen er en handledag og
-Oslo-klokken er innenfor 09:00–16:30. Det holder jobben borte på lørdag,
-søndag og norske helligdager som 1. mai, 17. mai, Kristi himmelfartsdag, pinse
-og julen. Den brede UTC-planen dekker både sommer- og vintertid, mens
-tidssjekken og Edge Functionens egen kalender og ferskhetssjekk hindrer
-kjøringer utenfor børsens åpningstid. Hver kjøring er idempotent via
-`sim_ticks.id`: en gjentatt forespørsel med samme tick-id blir ignorert.
+Jobben kjører `5,15,25,35,45,55 6-16 * * 1-5` UTC, men kaller bare Edge
+Function når `public.oslo_market_open_day(...)` sier at datoen er en handledag
+og Oslo-klokken er mellom 09:05 og 16:30. Det gir åpningsauksjonen fem minutter
+før første kjøring og holder jobben borte på lørdag, søndag og norske
+helligdager som 1. mai, 17. mai, Kristi himmelfartsdag, pinse og julen. Den
+brede UTC-planen dekker både sommer- og vintertid, mens tidssjekken og Edge
+Functionens egen kalender og ferskhetssjekk hindrer kjøringer utenfor børsens
+åpningstid. Hver kjøring er idempotent via `sim_ticks.id`: en gjentatt
+forespørsel med samme tick-id blir ignorert.
 
 Manuell test fra en maskin med `CRON_SECRET` tilgjengelig:
 

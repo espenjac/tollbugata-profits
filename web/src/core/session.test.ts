@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { marketSession } from "./session";
+import { marketSession, simulatorMayTick } from "./session";
 
 describe("marketSession", () => {
   it("is open during Oslo trading hours on a weekday", () => {
@@ -24,5 +24,19 @@ describe("marketSession", () => {
 
   it("is open on an ordinary weekday after a Sunday holiday", () => {
     expect(marketSession(new Date("2026-05-18T10:00:00+02:00"))).toBe("open");
+  });
+});
+
+describe("simulatorMayTick", () => {
+  it("waits five minutes after the open", () => {
+    expect(simulatorMayTick(new Date("2026-11-04T09:00:00+01:00"))).toBe(false);
+    expect(simulatorMayTick(new Date("2026-11-04T09:04:00+01:00"))).toBe(false);
+    expect(simulatorMayTick(new Date("2026-11-04T09:05:00+01:00"))).toBe(true);
+  });
+
+  it("does not tick outside the session or on holidays", () => {
+    expect(simulatorMayTick(new Date("2026-11-04T08:59:00+01:00"))).toBe(false);
+    expect(simulatorMayTick(new Date("2026-11-04T16:31:00+01:00"))).toBe(false);
+    expect(simulatorMayTick(new Date("2026-12-24T12:00:00+01:00"))).toBe(false);
   });
 });

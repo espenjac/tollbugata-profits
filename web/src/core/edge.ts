@@ -9,6 +9,6 @@ export {
   type SimPortfolioState,
 } from "./simulator";
 export { parseMarketSnapshot, type RawSnapshot } from "./snapshot";
-export { marketSession } from "./session";
+export { marketSession, simulatorMayTick } from "./session";
 export { osloDateString } from "./dates";
 export { DEFAULT_SETTINGS, mergeSettings } from "./config";

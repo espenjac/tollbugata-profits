@@ -22,6 +22,7 @@ import {
   osloDateString,
   parseMarketSnapshot,
   runSimulatorTick,
+  simulatorMayTick,
   type RawSnapshot,
   type SimMode,
   type SimPortfolioState,
@@ -135,6 +136,13 @@ serve(async (request) => {
   const now = new Date();
   if (marketSession(now) !== "open") {
     return json({ ok: true, skipped: "market-closed", at: now.toISOString() });
+  }
+  if (!simulatorMayTick(now)) {
+    return json({
+      ok: true,
+      skipped: "market-warming-up",
+      at: now.toISOString(),
+    });
   }
 
   try {
