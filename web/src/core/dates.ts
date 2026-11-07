@@ -89,6 +89,69 @@ function isWeekendDay(weekday: number): boolean {
   return weekday === 0 || weekday === 6;
 }
 
+// Oslo Børs is closed on these fixed dates every year. Christmas Eve and New
+// Year's Eve are full closures for Oslo (unlike several other Euronext venues,
+// which only close early).
+const FIXED_MARKET_HOLIDAYS = new Set([
+  "01-01", // New Year's Day
+  "05-01", // Labour Day
+  "05-17", // Constitution Day
+  "12-24", // Christmas Eve
+  "12-25", // Christmas Day
+  "12-26", // Boxing Day
+  "12-31", // New Year's Eve
+]);
+
+/** Movable feasts are counted as days from Easter Sunday. */
+const EASTER_MARKET_HOLIDAYS = new Set([
+  -3, // Maundy Thursday
+  -2, // Good Friday
+  1, // Easter Monday
+  39, // Ascension Day
+  50, // Whit Monday
+]);
+
+/** Easter Sunday in the Gregorian calendar (Meeus/Jones/Butcher). */
+export function easterSunday(year: number): { month: number; day: number } {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return { month, day };
+}
+
+/** True when Oslo Børs is closed for a public holiday on this date. */
+export function isOsloMarketHoliday(dateString: string): boolean {
+  const [year, month, day] = dateString.split("-").map(Number);
+  const key = `${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  if (FIXED_MARKET_HOLIDAYS.has(key)) {
+    return true;
+  }
+  const easter = easterSunday(year);
+  const easterUtc = Date.UTC(year, easter.month - 1, easter.day);
+  const dateUtc = Date.UTC(year, month - 1, day);
+  const daysFromEaster = Math.round((dateUtc - easterUtc) / 86_400_000);
+  return EASTER_MARKET_HOLIDAYS.has(daysFromEaster);
+}
+
+/** True when Oslo Børs has a trading day on this date. */
+export function isOsloMarketOpenDay(dateString: string): boolean {
+  if (isWeekendDay(weekdayOfDateString(dateString))) {
+    return false;
+  }
+  return !isOsloMarketHoliday(dateString);
+}
+
 export function daysUntil(dateString: string | null, today: string): number | null {
   if (dateString === null) {
     return null;
@@ -103,10 +166,10 @@ export function daysUntil(dateString: string | null, today: string): number | nu
 export function lastMarketOpen(now: Date = new Date()): Date {
   let dateString = osloDateString(now);
   const todayOpen = fromOsloDate(dateString, 9, 0);
-  if (now < todayOpen) {
+  if (now < todayOpen || !isOsloMarketOpenDay(dateString)) {
     dateString = addDaysToDateString(dateString, -1);
   }
-  while (isWeekendDay(weekdayOfDateString(dateString))) {
+  while (!isOsloMarketOpenDay(dateString)) {
     dateString = addDaysToDateString(dateString, -1);
   }
   return fromOsloDate(dateString, 9, 0);
@@ -114,15 +177,14 @@ export function lastMarketOpen(now: Date = new Date()): Date {
 
 export function newsWindowStart(now: Date = new Date()): Date {
   let dateString = addDaysToDateString(osloDateString(now), -1);
-  while (isWeekendDay(weekdayOfDateString(dateString))) {
+  while (!isOsloMarketOpenDay(dateString)) {
     dateString = addDaysToDateString(dateString, -1);
   }
   return fromOsloDate(dateString, 16, 30);
 }
 
 export function currentSessionOpen(now: Date = new Date()): Date | null {
-  const parts = osloParts(now);
-  if (isWeekendDay(parts.weekday)) {
+  if (!isOsloMarketOpenDay(osloDateString(now))) {
     return null;
   }
   const open = fromOsloDate(osloDateString(now), 9, 0);

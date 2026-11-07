@@ -15,4 +15,14 @@ describe("marketSession", () => {
   it("is closed on weekends", () => {
     expect(marketSession(new Date("2026-11-07T12:00:00+01:00"))).toBe("closed");
   });
+
+  it("is closed on Oslo Børs holidays", () => {
+    expect(marketSession(new Date("2026-04-03T12:00:00+02:00"))).toBe("closed");
+    expect(marketSession(new Date("2026-05-14T12:00:00+02:00"))).toBe("closed");
+    expect(marketSession(new Date("2026-12-24T12:00:00+01:00"))).toBe("closed");
+  });
+
+  it("is open on an ordinary weekday after a Sunday holiday", () => {
+    expect(marketSession(new Date("2026-05-18T10:00:00+02:00"))).toBe("open");
+  });
 });

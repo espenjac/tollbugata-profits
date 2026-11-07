@@ -1,11 +1,11 @@
-import { osloParts } from "./dates";
+import { isOsloMarketOpenDay, osloDateString, osloParts } from "./dates";
 
 export type MarketSession = "pre" | "open" | "closed";
 
-/** Oslo Børs is open 09:00–16:30 on weekdays. */
+/** Oslo Børs is open 09:00–16:30 on trading days (weekdays without holidays). */
 export function marketSession(now: Date = new Date()): MarketSession {
   const parts = osloParts(now);
-  if (parts.weekday === 0 || parts.weekday === 6) {
+  if (!isOsloMarketOpenDay(osloDateString(now))) {
     return "closed";
   }
   const minutes = parts.hour * 60 + parts.minute;

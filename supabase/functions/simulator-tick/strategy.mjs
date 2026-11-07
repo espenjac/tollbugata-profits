@@ -679,6 +679,58 @@ function weekdayOfDateString(dateString) {
 function isWeekendDay(weekday) {
 	return weekday === 0 || weekday === 6;
 }
+var FIXED_MARKET_HOLIDAYS = /* @__PURE__ */ new Set([
+	"01-01",
+	"05-01",
+	"05-17",
+	"12-24",
+	"12-25",
+	"12-26",
+	"12-31"
+]);
+/** Movable feasts are counted as days from Easter Sunday. */
+var EASTER_MARKET_HOLIDAYS = /* @__PURE__ */ new Set([
+	-3,
+	-2,
+	1,
+	39,
+	50
+]);
+/** Easter Sunday in the Gregorian calendar (Meeus/Jones/Butcher). */
+function easterSunday(year) {
+	const a = year % 19;
+	const b = Math.floor(year / 100);
+	const c = year % 100;
+	const d = Math.floor(b / 4);
+	const e = b % 4;
+	const f = Math.floor((b + 8) / 25);
+	const g = Math.floor((b - f + 1) / 3);
+	const h = (19 * a + b - d - g + 15) % 30;
+	const i = Math.floor(c / 4);
+	const k = c % 4;
+	const l = (32 + 2 * e + 2 * i - h - k) % 7;
+	const m = Math.floor((a + 11 * h + 22 * l) / 451);
+	return {
+		month: Math.floor((h + l - 7 * m + 114) / 31),
+		day: (h + l - 7 * m + 114) % 31 + 1
+	};
+}
+/** True when Oslo Børs is closed for a public holiday on this date. */
+function isOsloMarketHoliday(dateString) {
+	const [year, month, day] = dateString.split("-").map(Number);
+	const key = `${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+	if (FIXED_MARKET_HOLIDAYS.has(key)) return true;
+	const easter = easterSunday(year);
+	const easterUtc = Date.UTC(year, easter.month - 1, easter.day);
+	const dateUtc = Date.UTC(year, month - 1, day);
+	const daysFromEaster = Math.round((dateUtc - easterUtc) / 864e5);
+	return EASTER_MARKET_HOLIDAYS.has(daysFromEaster);
+}
+/** True when Oslo Børs has a trading day on this date. */
+function isOsloMarketOpenDay(dateString) {
+	if (isWeekendDay(weekdayOfDateString(dateString))) return false;
+	return !isOsloMarketHoliday(dateString);
+}
 function daysUntil(dateString, today) {
 	if (dateString === null) return null;
 	const [year, month, day] = dateString.split("-").map(Number);
@@ -688,7 +740,7 @@ function daysUntil(dateString, today) {
 	return Math.round((target - current) / 864e5);
 }
 function currentSessionOpen(now = /* @__PURE__ */ new Date()) {
-	if (isWeekendDay(osloParts(now).weekday)) return null;
+	if (!isOsloMarketOpenDay(osloDateString(now))) return null;
 	const open = fromOsloDate(osloDateString(now), 9, 0);
 	return now >= open ? open : null;
 }
@@ -726,10 +778,10 @@ function formatDateTime(value) {
 	return osloDateTimeString(value);
 }
 // src/core/session.ts
-/** Oslo Børs is open 09:00–16:30 on weekdays. */
+/** Oslo Børs is open 09:00–16:30 on trading days (weekdays without holidays). */
 function marketSession(now = /* @__PURE__ */ new Date()) {
 	const parts = osloParts(now);
-	if (parts.weekday === 0 || parts.weekday === 6) return "closed";
+	if (!isOsloMarketOpenDay(osloDateString(now))) return "closed";
 	const minutes = parts.hour * 60 + parts.minute;
 	if (minutes < 540) return "pre";
 	if (minutes <= 990) return "open";
