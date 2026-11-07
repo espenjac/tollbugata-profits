@@ -9,6 +9,8 @@ export * from "./nordnet";
 export * from "./report";
 export * from "./screen";
 export * from "./session";
+export * from "./simulator";
+export * from "./snapshot";
 export * from "./strategy";
 export * from "./swing";
 export * from "./trade";

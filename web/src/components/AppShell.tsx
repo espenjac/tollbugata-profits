@@ -25,6 +25,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             Kursinformasjon
           </NavLink>
           <NavLink to="/etrade">Etrade</NavLink>
+          <NavLink to="/simulator">Simulator</NavLink>
           <NavLink to="/logg">Handelsdagbok</NavLink>
         </nav>
         <div className="topbar-actions">

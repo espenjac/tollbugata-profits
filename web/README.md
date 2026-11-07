@@ -1,8 +1,8 @@
 # V2 frontend (React + Vite + Supabase)
 
 Dette er den aktive Tollbugata Profits-appen. Den er en statisk React-PWA på
-GitHub Pages med Supabase til innlogging, database og én Edge Function for
-markedsdata.
+GitHub Pages med Supabase til innlogging, database, markedsdata og
+papirhandel.
 
 ## Lokal utvikling
 
@@ -21,16 +21,17 @@ samme base-path som GitHub Pages.
 
 - Node 22 eller nyere.
 - En Supabase-project med Google-innlogging.
-- Edge Function `market-snapshot` deployet.
+- Edge Functions `market-snapshot` og `simulator-tick` deployet.
 - GitHub Pages satt til **GitHub Actions** som kilde.
 
 ## Kommandoer
 
 ```bash
 npm run dev        # lokal utvikling
-npm test           # Vitest-paritetstester mot Python-fixtures
+npm test           # Vitest-tester, inkludert Python-paritet og simulator
 npm run typecheck  # TypeScript
 npm run build      # produksjonsbygg i web/dist
+npm run build:edge # bygg delt kjerne til simulator-tick/strategy.mjs
 npm run preview    # forhåndsvis produksjonsbygget
 ```
 
@@ -61,6 +62,15 @@ npm run preview    # forhåndsvis produksjonsbygget
 - `src/pages/JournalPage.tsx` er `/logg`. Den henter bare Supabase-data og
   kontakter aldri markeds-API-ene. Åpne posisjoner viser gevinstmål og stop
   regnet fra faktisk snittkost, antall handledager og tidsstopp etter 5 dager.
+- `src/core/simulator.ts` inneholder papirhandel-logikken for Swing og Etrade.
+  Begge modusene har 5 000 kr, eier maks én aksje og betaler 29 kr i kurtasje
+  hver vei. `src/core/edge.ts` eksporterer den delte kjernen til
+  `simulator-tick`-funksjonen, og `npm run build:edge` lager
+  `supabase/functions/simulator-tick/strategy.mjs`.
+- `src/pages/SimulatorPage.tsx` er `/simulator`. Den viser begge porteføljene,
+  en graf fra `sim_equity_daily` og separate kjøp/salg-tabs per modus.
+  `src/lib/useSimulator.ts` oppdaterer visningen hvert minutt; selve
+  papirhandelen kjøres av `pg_cron` hvert tiende minutt mens børsen er åpen.
 - Rapporthistorikk inneholder siste lagrede versjon per dato. Rapporten
   erstattes når du oppdaterer samme dag.
 

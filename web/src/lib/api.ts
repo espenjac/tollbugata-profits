@@ -14,10 +14,22 @@ import {
   type TradeEntry,
   type TradeInput,
 } from "../core/journal";
-import { parseScannerPayload } from "../core/market";
-import { emptyNewsFeed, parseNewsPayload, type NewsFeed } from "../core/news";
-import type { MarketReport, Universe } from "../core/types";
+import {
+  parseMarketSnapshot,
+  type MarketSnapshot,
+  type RawSnapshot,
+} from "../core/snapshot";
+import type { MarketReport } from "../core/types";
+import type {
+  SimEquity,
+  SimMode,
+  SimPendingOrder,
+  SimPosition,
+  SimTrade,
+} from "../core/simulator";
 import { requireSupabase } from "./supabase";
+
+export type { MarketSnapshot } from "../core/snapshot";
 
 export interface ReportHistoryItem {
   id: string;
@@ -26,47 +38,6 @@ export interface ReportHistoryItem {
   mainTicker: string | null;
   mainScore: number | null;
   noTrade: boolean;
-}
-
-interface RawSnapshotSource<T> {
-  payload?: T;
-  tickers?: string[];
-  since?: string;
-  fetchedAt?: string;
-  warning?: string | null;
-  source?: string;
-}
-
-interface RawSnapshot {
-  generatedAt?: string;
-  scan?: RawSnapshotSource<unknown>;
-  growth?: RawSnapshotSource<unknown>;
-  news?: RawSnapshotSource<unknown>;
-  error?: string;
-}
-
-export interface MarketSnapshot {
-  universe: Universe;
-  news: NewsFeed;
-  generatedAt: Date;
-}
-
-function sourceValue(
-  value: string | undefined,
-): "live" | "cache" | "stale-cache" {
-  if (value === "cache" || value === "stale-cache") {
-    return value;
-  }
-  return "live";
-}
-
-function newsSourceValue(
-  value: string | undefined,
-): "live" | "cache" | "stale-cache" | "error" {
-  if (value === "cache" || value === "stale-cache" || value === "error") {
-    return value;
-  }
-  return "live";
 }
 
 export async function edgeFunctionErrorMessage(
@@ -120,64 +91,7 @@ export async function fetchMarketSnapshot(): Promise<MarketSnapshot> {
   if (error) {
     throw new Error(await edgeFunctionErrorMessage(error));
   }
-  if (!data || data.error) {
-    throw new Error(data?.error ?? "Markedsfunksjonen svarte uten data.");
-  }
-  if (!data.scan?.payload) {
-    throw new Error("Markedssvaret manglet TradingView-data.");
-  }
-
-  const growthTickers = new Set<string>(
-    Array.isArray(data.growth?.tickers) ? data.growth.tickers : [],
-  );
-  const stocks = parseScannerPayload(
-    data.scan.payload as { data?: Array<{ s?: string; d?: unknown[] }> },
-    growthTickers,
-  );
-  if (stocks.length === 0) {
-    throw new Error("TradingView returnerte ingen aksjer for Oslo Børs.");
-  }
-
-  const newsFetchedAt = data.news?.fetchedAt
-    ? new Date(data.news.fetchedAt)
-    : new Date();
-  const newsSince = data.news?.since
-    ? new Date(data.news.since)
-    : new Date(Date.now() - 24 * 60 * 60 * 1000);
-  let news: NewsFeed;
-  try {
-    news = parseNewsPayload(
-      data.news?.payload,
-      newsSince,
-      newsFetchedAt,
-      newsSourceValue(data.news?.source),
-      data.news?.warning ?? null,
-    );
-  } catch (error) {
-    news = emptyNewsFeed(
-      newsFetchedAt,
-      newsSince,
-      error instanceof Error ? error.message : String(error),
-    );
-  }
-
-  return {
-    universe: {
-      stocks,
-      fetchedAt: data.scan.fetchedAt
-        ? new Date(data.scan.fetchedAt)
-        : new Date(),
-      source: sourceValue(data.scan.source),
-      warning: data.scan.warning ?? null,
-      growthTickers,
-      growthSource: data.growth?.source
-        ? newsSourceValue(data.growth.source)
-        : "ukjent",
-      growthWarning: data.growth?.warning ?? null,
-    },
-    news,
-    generatedAt: data.generatedAt ? new Date(data.generatedAt) : new Date(),
-  };
+  return parseMarketSnapshot(data ?? {});
 }
 
 function payloadForReport(report: MarketReport): Record<string, unknown> {
@@ -491,4 +405,123 @@ export async function cashAdjustment(
 
 export function todayDate(): string {
   return osloDateString(new Date());
+}
+
+export interface SimulatorPortfolio {
+  mode: SimMode;
+  startingCash: number;
+  cash: number;
+  position: SimPosition | null;
+  pending: SimPendingOrder | null;
+  updatedAt: Date | null;
+}
+
+export interface SimulatorTradeRecord extends SimTrade {
+  id: number;
+  mode: SimMode;
+}
+
+export interface SimulatorEquityPoint extends SimEquity {
+  mode: SimMode;
+  day: string;
+  recordedAt: Date;
+}
+
+export interface SimulatorData {
+  portfolios: SimulatorPortfolio[];
+  trades: SimulatorTradeRecord[];
+  equity: SimulatorEquityPoint[];
+}
+
+interface SimulatorPortfolioRow {
+  mode: SimMode;
+  starting_cash: number | string;
+  cash: number | string;
+  position: SimPosition | null;
+  pending: SimPendingOrder | null;
+  updated_at: string | null;
+}
+
+interface SimulatorTradeRow {
+  id: number;
+  mode: SimMode;
+  ticker: string;
+  side: "buy" | "sell";
+  quantity: number | string;
+  price: number | string;
+  fee: number | string;
+  realized_pnl: number | string | null;
+  reason: string;
+  executed_at: string;
+}
+
+interface SimulatorEquityRow {
+  mode: SimMode;
+  day: string;
+  cash: number | string;
+  position_value: number | string;
+  equity: number | string;
+  recorded_at: string;
+}
+
+/**
+ * Loads the shared paper portfolios, their trade history and the daily equity
+ * curve. All three tables are read-only for authenticated users.
+ */
+export async function loadSimulator(): Promise<SimulatorData> {
+  const client = requireSupabase();
+  const [portfolios, trades, equity] = await Promise.all([
+    client
+      .from("sim_portfolios")
+      .select("mode,starting_cash,cash,position,pending,updated_at"),
+    client
+      .from("sim_trades")
+      .select(
+        "id,mode,ticker,side,quantity,price,fee,realized_pnl,reason,executed_at",
+      )
+      .order("executed_at", { ascending: false })
+      .limit(300),
+    client
+      .from("sim_equity_daily")
+      .select("mode,day,cash,position_value,equity,recorded_at")
+      .order("day", { ascending: true }),
+  ]);
+
+  for (const result of [portfolios, trades, equity]) {
+    if (result.error) {
+      throw new Error(`Kunne ikke lese simulatoren: ${result.error.message}`);
+    }
+  }
+
+  return {
+    portfolios: (portfolios.data as SimulatorPortfolioRow[]).map((row) => ({
+      mode: row.mode,
+      startingCash: Number(row.starting_cash),
+      cash: Number(row.cash),
+      position: row.position,
+      pending: row.pending,
+      updatedAt: row.updated_at ? new Date(row.updated_at) : null,
+    })),
+    trades: (trades.data as SimulatorTradeRow[]).map((row) => ({
+      id: row.id,
+      mode: row.mode,
+      ticker: row.ticker,
+      side: row.side,
+      quantity: Number(row.quantity),
+      price: Number(row.price),
+      fee: Number(row.fee),
+      realizedPnl:
+        row.realized_pnl === null ? null : Number(row.realized_pnl),
+      reason: row.reason,
+      executedAt: row.executed_at,
+    })),
+    equity: (equity.data as SimulatorEquityRow[]).map((row) => ({
+      mode: row.mode,
+      day: row.day,
+      cash: Number(row.cash),
+      positionValue: Number(row.position_value),
+      equity: Number(row.equity),
+      recordedAt: new Date(row.recorded_at),
+    })),
+  };
 }

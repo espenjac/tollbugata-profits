@@ -6,6 +6,7 @@ import { useAuth } from "./lib/auth-context";
 import { DashboardPage } from "./pages/DashboardPage";
 import { EtradePage } from "./pages/EtradePage";
 import { JournalPage } from "./pages/JournalPage";
+import { SimulatorPage } from "./pages/SimulatorPage";
 
 function routerBasename(): string | undefined {
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -35,6 +36,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/etrade" element={<EtradePage />} />
+          <Route path="/simulator" element={<SimulatorPage />} />
           <Route path="/logg" element={<JournalPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

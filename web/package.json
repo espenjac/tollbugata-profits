@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:edge": "vite build --config vite.edge.config.ts",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",

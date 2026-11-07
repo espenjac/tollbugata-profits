@@ -3,3 +3,6 @@ project_id = "tollbugata-profits"
 
 [functions.market-snapshot]
 verify_jwt = true
+
+[functions.simulator-tick]
+verify_jwt = false

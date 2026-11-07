@@ -508,29 +508,38 @@ serve(async (request) => {
   }
 
   try {
-    const authorization = request.headers.get("Authorization") ?? "";
-    const token = authorization.replace(/^Bearer\s+/i, "");
-    if (!token) {
-      return json({ error: "Missing bearer token" }, 401);
-    }
-    const { data, error } = await admin.auth.getUser(token);
-    if (error || !data.user) {
-      return json({ error: "Invalid session" }, 401);
-    }
-    const allowedEmails = [
-      Deno.env.get("ALLOWED_EMAILS") ?? "",
-      Deno.env.get("OWNER_EMAIL") ?? "",
-    ]
-      .join(",")
-      .split(",")
-      .map((email) => email.trim().toLowerCase())
-      .filter(Boolean);
-    const userEmail = data.user.email?.trim().toLowerCase();
-    if (
-      allowedEmails.length > 0 &&
-      (!userEmail || !allowedEmails.includes(userEmail))
-    ) {
-      return json({ error: "This account is not allowed" }, 403);
+    // The scheduled simulator calls this function server-to-server. It is
+    // authenticated with a dedicated shared secret instead of a user JWT.
+    const internalSecret = Deno.env.get("SIMULATOR_SECRET") ?? "";
+    const providedSecret = request.headers.get("x-internal-secret") ?? "";
+    const internalRequest =
+      internalSecret.length > 0 && providedSecret === internalSecret;
+
+    if (!internalRequest) {
+      const authorization = request.headers.get("Authorization") ?? "";
+      const token = authorization.replace(/^Bearer\s+/i, "");
+      if (!token) {
+        return json({ error: "Missing bearer token" }, 401);
+      }
+      const { data, error } = await admin.auth.getUser(token);
+      if (error || !data.user) {
+        return json({ error: "Invalid session" }, 401);
+      }
+      const allowedEmails = [
+        Deno.env.get("ALLOWED_EMAILS") ?? "",
+        Deno.env.get("OWNER_EMAIL") ?? "",
+      ]
+        .join(",")
+        .split(",")
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean);
+      const userEmail = data.user.email?.trim().toLowerCase();
+      if (
+        allowedEmails.length > 0 &&
+        (!userEmail || !allowedEmails.includes(userEmail))
+      ) {
+        return json({ error: "This account is not allowed" }, 403);
+      }
     }
 
     const [scan, growth, news] = await Promise.all([

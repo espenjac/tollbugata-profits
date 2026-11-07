@@ -1898,6 +1898,328 @@ th button.sort-active {
   font-size: 0.8rem;
 }
 
+/* Simulator */
+
+.tone-positive {
+  color: var(--positive);
+}
+
+.tone-negative {
+  color: var(--negative);
+}
+
+.sim-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.sim-summary-card {
+  display: grid;
+  gap: 0.8rem;
+  padding: 1rem;
+  background:
+    linear-gradient(160deg, rgba(56, 214, 176, 0.06), transparent 45%),
+    var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.sim-summary-etrade {
+  background:
+    linear-gradient(160deg, rgba(90, 167, 255, 0.07), transparent 45%),
+    var(--panel);
+}
+
+.sim-summary-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.sim-summary-card h2 {
+  margin: 0.1rem 0 0;
+  font-size: 1.5rem;
+  letter-spacing: -0.03em;
+}
+
+.sim-summary-card header > strong {
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.sim-summary-value strong {
+  display: block;
+  color: var(--text-strong);
+  font-size: 2rem;
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
+}
+
+.sim-summary-value small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.sim-summary-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.sim-summary-stats span {
+  display: grid;
+  gap: 0.05rem;
+  padding: 0.5rem 0.6rem;
+  background: var(--panel-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+}
+
+.sim-summary-stats strong {
+  color: var(--text-strong);
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.sim-summary-stats small {
+  color: var(--muted);
+  font-size: 0.64rem;
+}
+
+.sim-position {
+  display: grid;
+  gap: 0.15rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--border-soft);
+}
+
+.sim-position-label {
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sim-position strong {
+  color: var(--text-strong);
+  font-size: 0.92rem;
+}
+
+.sim-position small {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.sim-position-pending {
+  border-top-color: rgba(255, 200, 87, 0.3);
+}
+
+.sim-position-empty strong {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.sim-chart-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.sim-chart {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.sim-chart svg {
+  width: 100%;
+  height: auto;
+  min-height: 230px;
+  overflow: visible;
+}
+
+.sim-chart text {
+  fill: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.sim-grid-line {
+  stroke: var(--border-soft);
+  stroke-dasharray: 3 5;
+}
+
+.sim-start-line {
+  stroke: var(--muted);
+  stroke-dasharray: 6 6;
+  opacity: 0.45;
+}
+
+.sim-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.2rem;
+}
+
+.sim-chart-legend-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--muted);
+  font-size: 0.74rem;
+  white-space: nowrap;
+}
+
+.sim-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.sim-legend strong {
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.sim-legend small {
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.sim-legend-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+.sim-legend-etrade .sim-legend-dot,
+.sim-legend-dot-etrade {
+  background: var(--blue);
+}
+
+.sim-chart-empty {
+  display: grid;
+  gap: 0.35rem;
+  place-items: center;
+  padding: 2.4rem 1rem;
+  text-align: center;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.sim-chart-empty strong {
+  color: var(--text-strong);
+}
+
+.sim-chart-empty p {
+  max-width: 46ch;
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.sim-chart-footnote {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.sim-tabs {
+  display: flex;
+  gap: 0.45rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.sim-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sim-tab small {
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--panel-3);
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.sim-tab-active {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--text-strong);
+}
+
+.sim-trade-table td {
+  font-size: 0.76rem;
+}
+
+.sim-trade-reason {
+  max-width: 24rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sim-empty {
+  display: grid;
+  gap: 0.3rem;
+  padding: 1.5rem 1rem;
+  text-align: center;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.sim-empty strong {
+  color: var(--text-strong);
+}
+
+.sim-empty p {
+  max-width: 52ch;
+  margin: 0 auto;
+  font-size: 0.8rem;
+}
+
+.sim-about p {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.65;
+}
+
+@media (max-width: 760px) {
+  .sim-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sim-summary-value strong {
+    font-size: 1.7rem;
+  }
+
+  .sim-trade-reason {
+    max-width: 12rem;
+  }
+
+  .sim-chart-legend-inline {
+    display: none;
+  }
+}
+
 /* Loading */
 
 .loading-view {

@@ -5,8 +5,11 @@ Appen bruker Supabase til:
 - Google-innlogging.
 - `accounts`, `trades`, `cash_adjustments`, `reports`, `settings` og `profiles`.
 - `market_cache`, som bare Edge Function med service role kan lese.
+- `sim_portfolios`, `sim_trades`, `sim_equity` og `sim_ticks` for de to
+  papirporteføljene. Inviterte brukere kan lese; bare service role kan skrive.
 - Edge Function `market-snapshot`, som henter TradingView, Euronext Growth og
   NewsWeb server-side fordi NewsWeb blokkerer nettleser-CORS.
+- Edge Function `simulator-tick`, som kjører papirhandlene på en `pg_cron`-plan.
 
 ## 1. Opprett prosjekt
 
@@ -30,7 +33,10 @@ supabase db push
 Migreringen lager tabeller, RLS-policyer, `account_balances`-viewet og en
 trigger som oppretter profil, konto og innstillinger for nye brukere.
 `0002_report_updates.sql` legger til update-policy på `reports`, slik at dagens
-rapport kan erstattes med nyere kurs.
+rapport kan erstattes med nyere kurs. `0003_simulator.sql` lager tabellene for
+papirhandel og den idempotente `apply_simulator_tick`-funksjonen.
+`0004_simulator_cron.sql` aktiverer `pg_cron`/`pg_net` og planlegger
+simulatorkjøringen.
 
 ## 3. Google-innlogging
 
@@ -78,7 +84,91 @@ Funksjonen cacher TradingView i 10 minutter, NewsWeb i 5 minutter og
 Euronext Growth i 24 timer. Ved feil brukes gammel cache med advarsel når den
 finnes.
 
-## 5. GitHub Pages
+## 5. Simulator og pg_cron
+
+Simulatoren har to delte papirporteføljer, `swing` og `etrade`. Begge starter
+med 5 000 kr. `simulator-tick` henter ferske markedsdata, bygger de samme
+signalene som appen, og skriver kjøp, salg og egenkapital til Supabase. Den
+sender aldri ordrer til en megler.
+
+1. Bygg den delte TypeScript-kjernen til Edge Function:
+
+   ```bash
+   cd web
+   npm run build:edge
+   ```
+
+   Dette oppdaterer `supabase/functions/simulator-tick/strategy.mjs`. Kjør
+   kommandoen på nytt etter endringer i simulator-, rapport- eller
+   screeningslogikken.
+
+2. Sett to tilfeldige hemmeligheter:
+
+   ```bash
+   supabase secrets set \
+     SIMULATOR_SECRET=<lang-tilfeldig-verdi> \
+     CRON_SECRET=<annen-lang-tilfeldig-verdi>
+   ```
+
+   `SIMULATOR_SECRET` brukes når `simulator-tick` kaller `market-snapshot`
+   server-til-server. `CRON_SECRET` brukes av `pg_cron` mot `simulator-tick`.
+
+3. Deploy begge funksjonene:
+
+   ```bash
+   supabase functions deploy market-snapshot
+   supabase functions deploy simulator-tick --no-verify-jwt
+   ```
+
+4. Legg samme verdi som `CRON_SECRET` i Supabase Vault, slik at cron-jobben
+   kan lese den uten at hemmeligheten ligger i en migrering:
+
+   ```sql
+   select vault.create_secret('<samme-som-CRON_SECRET>', 'simulator_cron_secret');
+   ```
+
+   Hvis navnet finnes fra før:
+
+   ```sql
+   select vault.update_secret(
+     (select id from vault.secrets where name = 'simulator_cron_secret'),
+     '<samme-som-CRON_SECRET>'
+   );
+   ```
+
+5. `0004_simulator_cron.sql` oppretter jobben. Kontroller den:
+
+   ```sql
+   select jobid, jobname, schedule, active
+   from cron.job
+   where jobname = 'simulator-tick';
+
+   select status, return_message, start_time
+   from cron.job_run_details
+   order by start_time desc
+   limit 10;
+   ```
+
+Jobben kjører `*/10 6-16 * * 1-5` UTC. Edge Function avviser kjøringen når
+Oslo Børs er stengt eller markedsdataene er eldre enn 15 minutter, så den brede
+UTC-planen dekker både sommer- og vintertid uten å registrere falske handler.
+Hver kjøring er idempotent via `sim_ticks.id`: en gjentatt forespørsel med
+samme tick-id blir ignorert.
+
+Manuell test fra en maskin med `CRON_SECRET` tilgjengelig:
+
+```bash
+curl -X POST \
+  https://<project-ref>.supabase.co/functions/v1/simulator-tick \
+  -H "Content-Type: application/json" \
+  -H "x-cron-secret: $CRON_SECRET" \
+  -d '{}'
+```
+
+Du kan også se og oppdatere resultatene i appens `/simulator`-fane. Grafen
+bruker `sim_equity_daily`, som viser siste simulerte verdi per handledag.
+
+## 6. GitHub Pages
 
 Repository → **Settings → Pages** → **Build and deployment** → **Source:
 GitHub Actions**.
@@ -103,7 +193,7 @@ https://<github-bruker>.github.io/tollbugata-profits/
 `web/public/404.html` gjør at dype lenker som `/logg` fungerer på GitHub Pages
 uten server-side rewrites.
 
-## 6. Engangsmigrering av gammel dagbok
+## 7. Engangsmigrering av gammel dagbok
 
 Den gamle Python-dagboken har fire handler i `data/journal.json`, og
 `reports/premarket/` har eldre rapporter. Når eieren har logget inn og fått en
@@ -132,6 +222,8 @@ siden på nytt i appen.
 ## Gratisnivå
 
 Supabase free tier holder for noen få brukere: 500 MB database, 5 GB egress og
-500 000 Edge Function-kall per måned. Prosjektet kan pauses etter sju dagers
-inaktivitet og har ikke automatisk backup. Eksporter data utenfor appen ved
-behov.
+500 000 Edge Function-kall per måned. Simulatoren bruker omtrent 1 500 kall i
+måneden, godt innenfor grensen. Prosjektet kan pauses etter sju dagers
+inaktivitet og har ikke automatisk backup. `pg_cron` kjører ikke mens prosjektet
+er pauset, så åpne appen jevnlig eller vekk prosjektet eksternt hvis
+simuleringen skal gå uavbrutt.

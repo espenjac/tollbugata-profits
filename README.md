@@ -16,10 +16,11 @@ Aktiv app er en statisk React-PWA:
 - **React 19 + Vite + TypeScript** i `web/`.
 - **Supabase Auth med Google** for eier og inviterte brukere.
 - **Supabase Postgres** med RLS for konto, handler, saldojusteringer,
-  rapporter og innstillinger.
-- **Én Edge Function**, `market-snapshot`, henter TradingView, Euronext Growth
-  og NewsWeb server-side og cacher svarene. NewsWeb blokkerer nettleser-CORS,
-  derfor må den gå via Supabase.
+  rapporter, innstillinger og papirhandel.
+- **To Edge Functions**: `market-snapshot` henter TradingView, Euronext Growth
+  og NewsWeb server-side og cacher svarene, mens `simulator-tick` kjører
+  papirhandlerne på en `pg_cron`-plan. NewsWeb blokkerer nettleser-CORS, derfor
+  må markedsdata gå via Supabase.
 - **GitHub Pages** publiserer `web/dist` uten eget domene.
 - **PWA** med manifest, service worker og SPA-fallback via `404.html`.
 
@@ -55,6 +56,14 @@ Oppsett:
   havner på «På radaren» i stedet for i de klare ideene. Etrade-ideene lagres
   ikke som historikk og bygges på nytt fra ferskeste kurs hver gang. Modusen er
   long only; short-ideer er bevisst ikke en del av appen.
+- **Simulator** på `/simulator` viser to papirporteføljer, Swing og Etrade, som
+  begge starter med 5 000 kr. En planlagt Edge Function sjekker markedet hvert
+  tiende minutt, kjøper den beste anbefalingen i hver modus og selger etter
+  stop, mål, trailing stop, delmål eller tidsstopp. Hver modus eier maks én
+  aksje om gangen, betaler 29 kr i kurtasje hver vei og registrerer alle kjøp og
+  salg. Fanen viser utviklingsgraf, nøkkeltall og separate handler per modus.
+  Dette er fremoverrettet papirhandel, ikke backtesting, og ingen ekte ordrer
+  sendes.
 - Når børsen er åpen, cacher Edge Function skannerdata i 30 sekunder. Utenfor
   børstid brukes 10 minutter.
 - Screening, filtre, nyhetsliste og aksjetabell er samlet i en sammenleggbar
@@ -70,8 +79,9 @@ Oppsett:
 - Bare manuell registrering. Ingen automatisk handel, ingen ordre-API.
 - Ingen JSON-filer, import/eksport eller innebygd backup i V2. All persistens
   er Supabase, og backup tas utenfor appen.
-- Ingen pre-market-generering, planlagt rapportgenerering eller cron. Hver
+- Ingen pre-market-generering eller planlagt rapportgenerering. Hver
   forespørsel bygger rapporten på nytt fra ferskeste tilgjengelige data.
+  `pg_cron` brukes bare til papirhandlerne i simulatoren.
 - Backtest er ikke en del av V2-frontenden. Python-verktøyet beholdes som
   forskningsreferanse.
 - `market_cache` er bare tilgjengelig for service role.
@@ -96,12 +106,20 @@ cd web
 npm test
 npm run typecheck
 npm run build
+npm run build:edge
 npm run preview
 ```
 
+`npm run build:edge` bygger den delte TypeScript-kjernen til
+`supabase/functions/simulator-tick/strategy.mjs`. Den genererte filen er
+committet slik at `supabase functions deploy` ikke trenger et Node-bygg.
+Kjør kommandoen på nytt etter endringer i simulator-, rapport- eller
+screeningslogikken.
+
 `npm test` kjører Vitest-paritetstester mot fixtures generert fra den gamle
 Python-implementasjonen. Testene dekker screening og full rapport, inkludert
-hovedkandidat, score, rangering og blokkerte kandidater.
+hovedkandidat, score, rangering og blokkerte kandidater, i tillegg til
+simulatorens kjøp, salg, delmål, tidsstopp og helgeregler.
 
 ## Datamodell
 
@@ -113,6 +131,12 @@ hovedkandidat, score, rangering og blokkerte kandidater.
   oppdateres med ny payload og `generated_at` ved hver oppdatering.
 - `account_balances`: derivert view for ledig kapital.
 - `market_cache`: service-role-only cache for Edge Function.
+- `sim_portfolios`: én delt papirportefølje per modus (`swing`, `etrade`) med
+  kontanter, åpen posisjon og eventuell ventende trigger.
+- `sim_trades`: append-only kjøp og salg med kurtasje og realisert resultat.
+- `sim_equity`: egenkapital per tick; `sim_equity_daily` viser siste verdi per
+  handledag for grafen.
+- `sim_ticks`: idempotent logg over hver planlagte kjøring.
 
 ## Legacy Python
 
