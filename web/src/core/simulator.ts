@@ -1,5 +1,4 @@
 import { settingsForCapital, type Settings } from "./config";
-import { osloParts } from "./dates";
 import { buildEtradeReport } from "./etrade";
 import { tradingDaysHeld } from "./journal";
 import { buildMarketReport } from "./report";
@@ -17,9 +16,6 @@ import type { Stock } from "./types";
  * so the same core rules used by the app are applied to the paper portfolio.
  */
 export const SIM_STARTING_CASH = 5_000;
-export const SIM_FRIDAY_NO_BUY_MINUTES = 15 * 60;
-export const SIM_FRIDAY_EXIT_MINUTES = 15 * 60 + 30;
-export const SIM_SWING_WEEKEND_MIN_GAIN = 0.03;
 
 export type SimMode = "swing" | "etrade";
 
@@ -125,16 +121,6 @@ function stockFor(
   return (
     snapshot.universe.stocks.find((stock) => stock.ticker === ticker) ?? null
   );
-}
-
-function osloMinutes(now: Date): number {
-  const parts = osloParts(now);
-  return parts.hour * 60 + parts.minute;
-}
-
-function fridayAfter(now: Date, minutes: number): boolean {
-  const parts = osloParts(now);
-  return parts.weekday === 5 && osloMinutes(now) >= minutes;
 }
 
 function sellQuantity(position: SimPosition, requested: number): number {
@@ -319,19 +305,6 @@ function manageSwing(context: TickContext): void {
     });
     return;
   }
-  const gain = price / position.entryPrice - 1;
-  if (
-    fridayAfter(context.now, SIM_FRIDAY_EXIT_MINUTES) &&
-    gain < SIM_SWING_WEEKEND_MIN_GAIN
-  ) {
-    executeSell(context, {
-      quantity: position.shares,
-      price,
-      fee: settings.trade.sellFee,
-      reason: "Helgeflagg",
-    });
-    return;
-  }
   const held = tradingDaysHeld(position.entryAt, context.now) ?? 0;
   if (held >= position.maxHoldingDays) {
     executeSell(context, {
@@ -346,9 +319,6 @@ function manageSwing(context: TickContext): void {
 function openSwing(context: TickContext): void {
   const { state, settings } = context;
   if (context.sold || state.position !== null || state.pending !== null) {
-    return;
-  }
-  if (fridayAfter(context.now, SIM_FRIDAY_NO_BUY_MINUTES)) {
     return;
   }
   const report = swingReport(context);
@@ -436,15 +406,6 @@ function manageEtrade(context: TickContext): void {
   if (state.position === null) {
     return;
   }
-  if (fridayAfter(context.now, SIM_FRIDAY_EXIT_MINUTES)) {
-    executeSell(context, {
-      quantity: state.position.shares,
-      price,
-      fee: settings.trade.sellFee,
-      reason: "Helgeflagg",
-    });
-    return;
-  }
   const held = tradingDaysHeld(state.position.entryAt, context.now) ?? 0;
   if (held >= state.position.maxHoldingDays) {
     executeSell(context, {
@@ -459,9 +420,6 @@ function manageEtrade(context: TickContext): void {
 function openEtrade(context: TickContext): void {
   const { state, settings } = context;
   if (context.sold || state.position !== null) {
-    return;
-  }
-  if (fridayAfter(context.now, SIM_FRIDAY_NO_BUY_MINUTES)) {
     return;
   }
 

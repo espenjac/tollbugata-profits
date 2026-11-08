@@ -72,8 +72,8 @@ export function weekendFlag(now: Date = new Date()): string | null {
     return null;
   }
   return (
-    "Helgeflagg: Fredag i dag. Vurder å selge før stengetid hvis du vil " +
-    "unngå gaprisiko over helgen, og vær ekstra forsiktig med nye kjøp sent " +
-    "på fredag. La sterke posisjoner løpe hvis stopen og planen tilsier det."
+    "Helgeflagg: Fredag i dag. Du kan holde posisjonen over helgen, men vær " +
+    "oppmerksom på gaprisiko og at nye kjøp sent på fredag kan få en dårligere " +
+    "inngang. La stopen og planen styre, ikke klokken."
   );
 }

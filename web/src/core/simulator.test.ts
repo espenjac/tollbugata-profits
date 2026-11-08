@@ -234,25 +234,24 @@ describe("runSimulatorTick", () => {
     expect(stateFor(results, "swing").position).toBeNull();
   });
 
-  it("closes a weak swing position before the weekend", () => {
+  it("holds a swing position over the weekend", () => {
     const friday = new Date("2026-11-06T15:45:00+01:00");
     const results = run(
       { swing: seedPosition({ ticker: "HOLD" }) },
       makeSnapshot([passiveStock({ close: 101 })], friday),
       friday,
     );
-    const [sell] = tradesFor(results, "swing");
 
-    expect(sell.reason).toBe("Helgeflagg");
-    expect(stateFor(results, "swing").position).toBeNull();
+    expect(tradesFor(results, "swing")).toHaveLength(0);
+    expect(stateFor(results, "swing").position).not.toBeNull();
   });
 
-  it("does not open swing positions after Friday 15:00", () => {
+  it("can open a swing position on Friday afternoon", () => {
     const friday = new Date("2026-11-06T15:30:00+01:00");
     const results = run({}, makeSnapshot([makeStock()], friday), friday);
 
-    expect(tradesFor(results, "swing")).toHaveLength(0);
-    expect(stateFor(results, "swing").position).toBeNull();
+    expect(tradesFor(results, "swing")).toHaveLength(1);
+    expect(stateFor(results, "swing").position?.ticker).toBe("TEST");
   });
 
   it("waits for an Etrade trigger and buys when it is crossed", () => {
@@ -353,5 +352,42 @@ describe("runSimulatorTick", () => {
 
     expect(tradesFor(results, "etrade")[0].reason).toBe("Tidsstopp");
     expect(stateFor(results, "etrade").position).toBeNull();
+  });
+
+  it("holds an Etrade position over the weekend", () => {
+    const friday = new Date("2026-11-06T15:45:00+01:00");
+    const results = run(
+      {
+        etrade: seedPosition({
+          ticker: "HOLD",
+          entryAt: "2026-11-05T09:30:00.000Z",
+          stopPrice: 95,
+          targets: [
+            { label: "T1", price: 120 },
+            { label: "T2", price: 130 },
+            { label: "T3", price: 140 },
+          ],
+          maxHoldingDays: 3,
+        }),
+      },
+      makeSnapshot([passiveStock({ close: 104 })], friday),
+      friday,
+    );
+
+    expect(tradesFor(results, "etrade")).toHaveLength(0);
+    expect(stateFor(results, "etrade").position).not.toBeNull();
+  });
+
+  it("can create an Etrade trigger on Friday afternoon", () => {
+    const friday = new Date("2026-11-06T15:30:00+01:00");
+    const nearHigh = { high52w: 100.4, ath: 100.4, high: 100.2 };
+    const results = run(
+      {},
+      makeSnapshot([makeStock(nearHigh)], friday),
+      friday,
+    );
+
+    expect(tradesFor(results, "etrade")).toHaveLength(0);
+    expect(stateFor(results, "etrade").pending?.ticker).toBe("TEST");
   });
 });

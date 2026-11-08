@@ -50,7 +50,8 @@ npm run preview    # forhåndsvis produksjonsbygget
   merkes med «siste handlede kurs» eller «siste sluttkurs». Edge Function
   cacher skannerdata i 30 sekunder mens børsen er åpen.
 - `src/core/swing.ts` beregner ATR-basert stop og mål for swingplanen og
-  fredagens helgeflagg. Standard horisont er 2–5 handledager.
+  fredagens helgeflagg som minner om gaprisiko. Standard horisont er 2–5
+  handledager, og posisjoner kan holdes over helgen.
 - `src/core/etrade.ts` bygger de kortsiktige Etrade-ideene. Hver ide får en
   breakout/pullback-trigger, stop på 3–5 % (1 × ATR), tre delmål på 2R/3,5R/5R,
   nettoresultat etter kurtasje og en «ugyldig under»-linje. Ideer som bryter

@@ -42,9 +42,9 @@ Oppsett:
 - Standard er swingplan med 2–5 handledager. Stopen settes til 1,2 × ATR,
   begrenset til 4–6 %, og målet til 1,8 × stop, begrenset til 8–10 %.
   Planen sier også at stopen skal flyttes opp, trail under høyeste kurs, og at
-  posisjonen skal ut etter 5 handledager hvis målet ikke er nådd. Fredager får
-  et helgeflagg. Valgene kan endres i `web/src/core/config.ts` og
-  `web/src/core/swing.ts`.
+  posisjonen skal ut etter 5 handledager hvis målet ikke er nådd. Helger er
+  tillatt; fredager får et helgeflagg som minner om gaprisiko. Valgene kan
+  endres i `web/src/core/config.ts` og `web/src/core/swing.ts`.
 - Rapporten bygges alltid på nytt fra ferske markedsdata når appen åpnes eller
   når du laster siden på nytt. Lagrede rapporter brukes bare til historikk,
   aldri som gjeldende rapport.
@@ -119,7 +119,7 @@ screeningslogikken.
 `npm test` kjører Vitest-paritetstester mot fixtures generert fra den gamle
 Python-implementasjonen. Testene dekker screening og full rapport, inkludert
 hovedkandidat, score, rangering og blokkerte kandidater, i tillegg til
-simulatorens kjøp, salg, delmål, tidsstopp og helgeregler.
+simulatorens kjøp, salg, delmål og tidsstopp.
 
 ## Datamodell
 

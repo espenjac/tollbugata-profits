@@ -1620,7 +1620,7 @@ function tradeLevels(config, atrPctValue = null) {
 /** A Friday reminder, not an automatic sell rule. */
 function weekendFlag(now = /* @__PURE__ */ new Date()) {
 	if (osloParts(now).weekday !== 5) return null;
-	return "Helgeflagg: Fredag i dag. Vurder å selge før stengetid hvis du vil unngå gaprisiko over helgen, og vær ekstra forsiktig med nye kjøp sent på fredag. La sterke posisjoner løpe hvis stopen og planen tilsier det.";
+	return "Helgeflagg: Fredag i dag. Du kan holde posisjonen over helgen, men vær oppmerksom på gaprisiko og at nye kjøp sent på fredag kan få en dårligere inngang. La stopen og planen styre, ikke klokken.";
 }
 // src/core/trade.ts
 function buildTradePlan(price, config, scenarioPcts, atrPctValue = null) {
@@ -2193,13 +2193,6 @@ function emptyPortfolioState(cash = SIM_STARTING_CASH) {
 function stockFor(snapshot, ticker) {
 	return snapshot.universe.stocks.find((stock) => stock.ticker === ticker) ?? null;
 }
-function osloMinutes(now) {
-	const parts = osloParts(now);
-	return parts.hour * 60 + parts.minute;
-}
-function fridayAfter(now, minutes) {
-	return osloParts(now).weekday === 5 && osloMinutes(now) >= minutes;
-}
 function sellQuantity(position, requested) {
 	return Math.max(0, Math.min(position.shares, Math.floor(requested)));
 }
@@ -2308,16 +2301,6 @@ function manageSwing(context) {
 		});
 		return;
 	}
-	const gain = price / position.entryPrice - 1;
-	if (fridayAfter(context.now, 930) && gain < .03) {
-		executeSell(context, {
-			quantity: position.shares,
-			price,
-			fee: settings.trade.sellFee,
-			reason: "Helgeflagg"
-		});
-		return;
-	}
 	if ((tradingDaysHeld(position.entryAt, context.now) ?? 0) >= position.maxHoldingDays) executeSell(context, {
 		quantity: position.shares,
 		price,
@@ -2328,7 +2311,6 @@ function manageSwing(context) {
 function openSwing(context) {
 	const { state, settings } = context;
 	if (context.sold || state.position !== null || state.pending !== null) return;
-	if (fridayAfter(context.now, 900)) return;
 	const main = swingReport(context).main;
 	if (main === null) return;
 	const stock = main.candidate.stock;
@@ -2380,15 +2362,6 @@ function manageEtrade(context) {
 		}
 	}
 	if (state.position === null) return;
-	if (fridayAfter(context.now, 930)) {
-		executeSell(context, {
-			quantity: state.position.shares,
-			price,
-			fee: settings.trade.sellFee,
-			reason: "Helgeflagg"
-		});
-		return;
-	}
 	if ((tradingDaysHeld(state.position.entryAt, context.now) ?? 0) >= state.position.maxHoldingDays) executeSell(context, {
 		quantity: state.position.shares,
 		price,
@@ -2399,7 +2372,6 @@ function manageEtrade(context) {
 function openEtrade(context) {
 	const { state, settings } = context;
 	if (context.sold || state.position !== null) return;
-	if (fridayAfter(context.now, 900)) return;
 	const report = etradeReport(context);
 	const best = report.ideas[0] ?? null;
 	if (state.pending !== null) {
