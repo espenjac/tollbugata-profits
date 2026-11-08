@@ -13,11 +13,18 @@ const MODE_COLORS: Record<SimMode, string> = {
   swing: "#38d6b0",
   etrade: "#5aa7ff",
 };
+const BENCHMARK_COLOR = "#f0b429";
 
 interface Series {
   mode: SimMode;
   values: Array<{ x: number; y: number; value: number }>;
   last: number;
+}
+
+interface BenchmarkPoint {
+  index: number;
+  value: number;
+  raw: number;
 }
 
 function buildSeries(
@@ -62,6 +69,49 @@ function buildSeries(
   return series;
 }
 
+/**
+ * Normalizes the OSEBX index level to the same starting cash as the paper
+ * portfolios, so all three lines show percentage development from day one.
+ */
+function normalizeBenchmark(
+  points: SimulatorEquityPoint[],
+  days: string[],
+  startingCash: number,
+): BenchmarkPoint[] {
+  const byDay = new Map<string, number>();
+  for (const point of points) {
+    if (
+      point.benchmark !== null &&
+      Number.isFinite(point.benchmark) &&
+      point.benchmark > 0 &&
+      !byDay.has(point.day)
+    ) {
+      byDay.set(point.day, point.benchmark);
+    }
+  }
+
+  let base: number | null = null;
+  let carried: number | null = null;
+  const line: BenchmarkPoint[] = [];
+  days.forEach((day, index) => {
+    const raw = byDay.get(day);
+    if (raw !== undefined) {
+      if (base === null) {
+        base = raw;
+      }
+      carried = raw;
+    }
+    if (base !== null && carried !== null) {
+      line.push({
+        index,
+        raw: carried,
+        value: (carried / base) * startingCash,
+      });
+    }
+  });
+  return line;
+}
+
 export function SimulatorChart({
   points,
   startingCash,
@@ -82,9 +132,11 @@ export function SimulatorChart({
   }
 
   const days = [...new Set(points.map((point) => point.day))].sort();
+  const benchmarkPoints = normalizeBenchmark(points, days, startingCash);
   const values = [
     startingCash,
     ...points.map((point) => point.equity),
+    ...benchmarkPoints.map((point) => point.value),
   ];
   let minimum = Math.min(...values);
   let maximum = Math.max(...values);
@@ -101,6 +153,15 @@ export function SimulatorChart({
       : PAD.left + (index / (days.length - 1)) * plotWidth;
   };
   const series = buildSeries(points, days, xFor, yFor);
+  const benchmarkSeries = benchmarkPoints.map((point) => ({
+    x: xFor(point.index),
+    y: yFor(point.value),
+    value: point.value,
+  }));
+  const benchmarkLast =
+    benchmarkSeries.length > 0
+      ? benchmarkSeries[benchmarkSeries.length - 1].value
+      : null;
   const ticks = [0, 0.25, 0.5, 0.75, 1].map(
     (fraction) => maximum - (maximum - minimum) * fraction,
   );
@@ -131,11 +192,29 @@ export function SimulatorChart({
             </div>
           );
         })}
+        <div className="sim-legend sim-legend-benchmark">
+          <span className="sim-legend-dot" aria-hidden="true" />
+          <span>OSEBX</span>
+          <strong>
+            {benchmarkLast === null ? "–" : formatMoney(benchmarkLast, 0)}
+          </strong>
+          {benchmarkLast === null ? null : (
+            <small
+              className={
+                benchmarkLast >= startingCash
+                  ? "tone-positive"
+                  : "tone-negative"
+              }
+            >
+              {formatPct(benchmarkLast / startingCash - 1)}
+            </small>
+          )}
+        </div>
       </div>
       <svg
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         role="img"
-        aria-label="Utvikling for swing- og Etrade-simulatorene"
+        aria-label="Utvikling for swing- og Etrade-simulatorene og OSEBX-indeksen"
       >
         {ticks.map((tick) => {
           const y = yFor(tick);
@@ -187,6 +266,34 @@ export function SimulatorChart({
             ))}
           </g>
         ))}
+        {benchmarkSeries.length > 0 ? (
+          <g>
+            <path
+              d={benchmarkSeries
+                .map(
+                  (point, index) =>
+                    `${index === 0 ? "M" : "L"}${point.x} ${point.y}`,
+                )
+                .join(" ")}
+              fill="none"
+              stroke={BENCHMARK_COLOR}
+              strokeWidth={2}
+              strokeDasharray="7 4"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              opacity={0.92}
+            />
+            {benchmarkSeries.map((point) => (
+              <circle
+                key={`benchmark-${point.x}`}
+                cx={point.x}
+                cy={point.y}
+                r={2.4}
+                fill={BENCHMARK_COLOR}
+              />
+            ))}
+          </g>
+        ) : null}
         {labelIndexes.map((index) => (
           <text
             key={`day-${days[index]}`}
@@ -206,7 +313,8 @@ export function SimulatorChart({
       </svg>
       <p className="sim-chart-footnote">
         Hver verdi er siste simulerte tick per handledag. Startkapital{" "}
-        {formatMoney(startingCash, 0)} per modus, før kurtasje.
+        {formatMoney(startingCash, 0)} per modus, før kurtasje. OSEBX er
+        normalisert til samme startverdi.
       </p>
     </div>
   );

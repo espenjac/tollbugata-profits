@@ -16,6 +16,8 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const SCAN_URL = "https://scanner.tradingview.com/norway/scan";
+const BENCHMARK_TICKER = "OSL:OSEBX";
+const BENCHMARK_NAME = "Oslo Børs Benchmark GI Index";
 const GROWTH_URL =
   "https://live.euronext.com/en/product_directory/data/stocks-oslo-euronext-growth-";
 const NEWS_URL = "https://api3.oslo.oslobors.no/v1/newsreader/list";
@@ -76,6 +78,13 @@ interface CacheRow {
   fetched_at: string;
   expires_at: string;
   source: string;
+}
+
+interface BenchmarkPayload {
+  ticker: string;
+  name: string;
+  value: number;
+  changePct: number | null;
 }
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -355,6 +364,111 @@ async function getScan(
   }
 }
 
+function normalizeBenchmark(
+  payload: Record<string, unknown> | null | undefined,
+): BenchmarkPayload | null {
+  if (!payload) {
+    return null;
+  }
+  const value = Number(payload.value);
+  if (!Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+  return {
+    ticker: typeof payload.ticker === "string" && payload.ticker.trim()
+      ? payload.ticker.trim()
+      : "OSEBX",
+    name: typeof payload.name === "string" && payload.name.trim()
+      ? payload.name.trim()
+      : BENCHMARK_NAME,
+    value,
+    changePct: typeof payload.changePct === "number" &&
+        Number.isFinite(payload.changePct)
+      ? payload.changePct
+      : null,
+  };
+}
+
+/**
+ * Fetches the Oslo Børs benchmark index (OSEBX). A missing index must never
+ * break the report, so failures return a null value instead of throwing.
+ */
+async function getBenchmark(ttlSeconds: number) {
+  const cached = await readCache("benchmark");
+  if (isFresh(cached, ttlSeconds)) {
+    const payload = normalizeBenchmark(
+      cached?.payload as Record<string, unknown> | undefined,
+    );
+    if (payload) {
+      return {
+        ...payload,
+        fetchedAt: cached?.fetched_at,
+        source: "cache",
+        warning: null,
+      };
+    }
+  }
+
+  try {
+    const payload = await fetchJson(SCAN_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "https://www.tradingview.com",
+        Referer:
+          "https://www.tradingview.com/markets/stocks-norway/market-movers-all-stocks/",
+      },
+      body: JSON.stringify({
+        symbols: { tickers: [BENCHMARK_TICKER], query: { types: [] } },
+        columns: ["name", "description", "close", "change"],
+      }),
+    });
+    const rows = Array.isArray(payload.data) ? payload.data : [];
+    const row = rows[0] as { d?: unknown[] } | undefined;
+    const values = Array.isArray(row?.d) ? row.d : [];
+    const change = values[3];
+    const benchmark = normalizeBenchmark({
+      ticker: values[0],
+      name: values[1],
+      value: values[2],
+      changePct: change === null || change === undefined ? null : Number(change),
+    });
+    if (!benchmark) {
+      throw new Error("TradingView returned no benchmark value");
+    }
+    await writeCache("benchmark", benchmark, ttlSeconds);
+    return {
+      ...benchmark,
+      fetchedAt: new Date().toISOString(),
+      source: "live",
+      warning: null,
+    };
+  } catch (error) {
+    const stale = normalizeBenchmark(
+      cached?.payload as Record<string, unknown> | undefined,
+    );
+    if (stale) {
+      return {
+        ...stale,
+        fetchedAt: cached?.fetched_at,
+        source: "stale-cache",
+        warning:
+          `Fersk OSEBX-kurs kunne ikke hentes (${errorMessage(error)}). ` +
+          `Viser cache fra ${cached?.fetched_at}.`,
+      };
+    }
+    return {
+      ticker: "OSEBX",
+      name: BENCHMARK_NAME,
+      value: null,
+      changePct: null,
+      fetchedAt: new Date().toISOString(),
+      source: "error",
+      warning: `Kunne ikke hente OSEBX-indeksen: ${errorMessage(error)}`,
+    };
+  }
+}
+
 function parseGrowthTickers(payload: Record<string, unknown>): string[] {
   const rows = payload.aaData;
   if (!Array.isArray(rows)) {
@@ -542,16 +656,19 @@ serve(async (request) => {
       }
     }
 
-    const [scan, growth, news] = await Promise.all([
-      getScan("scan", scanTtlSeconds(new Date())),
+    const scanTtl = scanTtlSeconds(new Date());
+    const [scan, growth, news, benchmark] = await Promise.all([
+      getScan("scan", scanTtl),
       getGrowth(),
       getNews(),
+      getBenchmark(scanTtl),
     ]);
     return json({
       generatedAt: new Date().toISOString(),
       scan,
       growth,
       news,
+      benchmark,
     });
   } catch (error) {
     console.error("market-snapshot failed", error);

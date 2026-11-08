@@ -21,12 +21,34 @@ export interface RawSnapshot {
   scan?: RawSnapshotSource<unknown>;
   growth?: RawSnapshotSource<unknown>;
   news?: RawSnapshotSource<unknown>;
+  benchmark?: RawBenchmark;
   error?: string;
+}
+
+export interface RawBenchmark {
+  ticker?: string;
+  name?: string;
+  value?: number | null;
+  changePct?: number | null;
+  fetchedAt?: string;
+  source?: string;
+  warning?: string | null;
+}
+
+export interface MarketBenchmark {
+  ticker: string;
+  name: string;
+  value: number;
+  changePct: number | null;
+  fetchedAt: Date;
+  source: "live" | "cache" | "stale-cache" | "error";
+  warning: string | null;
 }
 
 export interface MarketSnapshot {
   universe: Universe;
   news: NewsFeed;
+  benchmark: MarketBenchmark | null;
   generatedAt: Date;
 }
 
@@ -46,6 +68,39 @@ function newsSourceValue(
     return value;
   }
   return "live";
+}
+
+function parseBenchmark(
+  data: RawBenchmark | undefined,
+  now: Date,
+): MarketBenchmark | null {
+  if (
+    !data ||
+    data.value === null ||
+    data.value === undefined ||
+    !Number.isFinite(data.value) ||
+    data.value <= 0
+  ) {
+    return null;
+  }
+  return {
+    ticker:
+      typeof data.ticker === "string" && data.ticker.trim()
+        ? data.ticker.trim()
+        : "OSEBX",
+    name:
+      typeof data.name === "string" && data.name.trim()
+        ? data.name.trim()
+        : "Oslo Børs Benchmark GI Index",
+    value: data.value,
+    changePct:
+      typeof data.changePct === "number" && Number.isFinite(data.changePct)
+        ? data.changePct
+        : null,
+    fetchedAt: data.fetchedAt ? new Date(data.fetchedAt) : now,
+    source: newsSourceValue(data.source),
+    warning: data.warning ?? null,
+  };
 }
 
 /**
@@ -113,6 +168,7 @@ export function parseMarketSnapshot(
       growthWarning: data.growth?.warning ?? null,
     },
     news,
+    benchmark: parseBenchmark(data.benchmark, now),
     generatedAt: data.generatedAt ? new Date(data.generatedAt) : now,
   };
 }

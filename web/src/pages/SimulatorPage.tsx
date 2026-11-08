@@ -357,12 +357,14 @@ export function SimulatorPage() {
             <h2>Utvikling</h2>
             <p>
               Egenkapital per handledag. Begge modusene startet på{" "}
-              {formatMoney(startingCash, 0)}.
+              {formatMoney(startingCash, 0)}. OSEBX er normalisert til samme
+              startverdi.
             </p>
           </div>
           <div className="sim-chart-legend-inline">
             <span className="sim-legend-dot sim-legend-dot-swing" /> Swing
             <span className="sim-legend-dot sim-legend-dot-etrade" /> Etrade
+            <span className="sim-legend-dot sim-legend-dot-benchmark" /> OSEBX
           </div>
         </div>
         <SimulatorChart
@@ -411,7 +413,9 @@ export function SimulatorPage() {
           Dette er fremoverrettet papirhandel, ikke backtesting. Simulatoren
           bruker siste handlede kurs fra den samme markedshentingen som appen,
           og fyller ikke ordrer på historiske data. Hvis markedsdataene er
-          gamle, hopper jobben over kjøringen i stedet for å gjette.
+          gamle, hopper jobben over kjøringen i stedet for å gjette. OSEBX-linjen
+          i grafen er indeksutviklingen normalisert til samme 5 000 kr, slik at
+          porteføljene kan sammenlignes direkte med børsen.
         </p>
       </section>
     </div>

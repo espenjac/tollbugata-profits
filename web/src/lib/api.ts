@@ -424,6 +424,7 @@ export interface SimulatorTradeRecord extends SimTrade {
 export interface SimulatorEquityPoint extends SimEquity {
   mode: SimMode;
   day: string;
+  benchmark: number | null;
   recordedAt: Date;
 }
 
@@ -461,6 +462,7 @@ interface SimulatorEquityRow {
   cash: number | string;
   position_value: number | string;
   equity: number | string;
+  benchmark: number | string | null;
   recorded_at: string;
 }
 
@@ -483,7 +485,7 @@ export async function loadSimulator(): Promise<SimulatorData> {
       .limit(300),
     client
       .from("sim_equity_daily")
-      .select("mode,day,cash,position_value,equity,recorded_at")
+      .select("mode,day,cash,position_value,equity,benchmark,recorded_at")
       .order("day", { ascending: true }),
   ]);
 
@@ -521,6 +523,7 @@ export async function loadSimulator(): Promise<SimulatorData> {
       cash: Number(row.cash),
       positionValue: Number(row.position_value),
       equity: Number(row.equity),
+      benchmark: row.benchmark === null ? null : Number(row.benchmark),
       recordedAt: new Date(row.recorded_at),
     })),
   };

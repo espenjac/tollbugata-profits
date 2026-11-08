@@ -2103,6 +2103,11 @@ th button.sort-active {
   background: var(--blue);
 }
 
+.sim-legend-benchmark .sim-legend-dot,
+.sim-legend-dot-benchmark {
+  background: #f0b429;
+}
+
 .sim-chart-empty {
   display: grid;
   gap: 0.35rem;

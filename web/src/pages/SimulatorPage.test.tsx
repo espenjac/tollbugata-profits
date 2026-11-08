@@ -102,6 +102,7 @@ function makeData(): SimulatorData {
         cash: 5_000,
         positionValue: 0,
         equity: 5_000,
+        benchmark: 2050,
         recordedAt: new Date("2026-11-04T15:00:00+01:00"),
       },
       {
@@ -110,6 +111,7 @@ function makeData(): SimulatorData {
         cash: 5_000,
         positionValue: 0,
         equity: 5_000,
+        benchmark: 2050,
         recordedAt: new Date("2026-11-04T15:00:00+01:00"),
       },
       {
@@ -118,6 +120,7 @@ function makeData(): SimulatorData {
         cash: 2_000,
         positionValue: 3_060,
         equity: 5_060,
+        benchmark: 2055,
         recordedAt: new Date("2026-11-05T10:00:00+01:00"),
       },
       {
@@ -126,6 +129,7 @@ function makeData(): SimulatorData {
         cash: 5_000,
         positionValue: 0,
         equity: 5_000,
+        benchmark: 2055,
         recordedAt: new Date("2026-11-05T10:00:00+01:00"),
       },
     ],
@@ -143,6 +147,7 @@ describe("SimulatorPage", () => {
     expect(text).toContain("Swing");
     expect(text).toContain("Etrade");
     expect(text).toContain("Utvikling");
+    expect(text).toContain("OSEBX");
     expect(text).toContain("Kjøp og salg");
     expect(text).toContain("TEST");
     expect(text).toContain("Venter på trigger");

@@ -27,6 +27,15 @@ function rawSnapshot(): RawSnapshot {
       source: "live",
       warning: null,
     },
+    benchmark: {
+      ticker: "OSEBX",
+      name: "Oslo Børs Benchmark GI Index",
+      value: 2053.36,
+      changePct: -1.25,
+      fetchedAt: "2026-11-01T14:07:00+01:00",
+      source: "live",
+      warning: null,
+    },
   };
 }
 
@@ -42,9 +51,27 @@ describe("parseMarketSnapshot", () => {
     expect(snapshot.universe.growthSource).toBe("cache");
     expect(snapshot.news.source).toBe("live");
     expect(snapshot.news.itemsByTicker.size).toBeGreaterThan(0);
+    expect(snapshot.benchmark?.ticker).toBe("OSEBX");
+    expect(snapshot.benchmark?.value).toBe(2053.36);
+    expect(snapshot.benchmark?.changePct).toBe(-1.25);
+    expect(snapshot.benchmark?.source).toBe("live");
     expect(snapshot.generatedAt.toISOString()).toBe(
       new Date("2026-11-01T14:07:00+01:00").toISOString(),
     );
+  });
+
+  it("ignores a missing or invalid benchmark without failing the snapshot", () => {
+    const missing = rawSnapshot();
+    delete missing.benchmark;
+    expect(parseMarketSnapshot(missing).benchmark).toBeNull();
+
+    const invalid = rawSnapshot();
+    invalid.benchmark = { value: null, source: "error" };
+    expect(parseMarketSnapshot(invalid).benchmark).toBeNull();
+
+    const zero = rawSnapshot();
+    zero.benchmark = { value: 0, source: "live" };
+    expect(parseMarketSnapshot(zero).benchmark).toBeNull();
   });
 
   it("falls back to an empty news feed when NewsWeb is unusable", () => {

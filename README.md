@@ -134,8 +134,8 @@ simulatorens kjøp, salg, delmål, tidsstopp og helgeregler.
 - `sim_portfolios`: én delt papirportefølje per modus (`swing`, `etrade`) med
   kontanter, åpen posisjon og eventuell ventende trigger.
 - `sim_trades`: append-only kjøp og salg med kurtasje og realisert resultat.
-- `sim_equity`: egenkapital per tick; `sim_equity_daily` viser siste verdi per
-  handledag for grafen.
+- `sim_equity`: egenkapital per tick med OSEBX-nivå; `sim_equity_daily` viser
+  siste verdi per handledag for grafen, inkludert siste indeksnivå.
 - `sim_ticks`: idempotent logg over hver planlagte kjøring.
 
 ## Legacy Python

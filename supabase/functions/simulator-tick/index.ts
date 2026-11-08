@@ -177,10 +177,12 @@ serve(async (request) => {
       tickId,
       ranAt: now.toISOString(),
       snapshotAt: snapshot.universe.fetchedAt.toISOString(),
+      benchmark: snapshot.benchmark?.value ?? null,
       summary: {
         source: snapshot.universe.source,
         stocks: snapshot.universe.stocks.length,
         trades,
+        benchmark: snapshot.benchmark?.value ?? null,
       },
       portfolios: results.map((result) => ({
         mode: result.mode,

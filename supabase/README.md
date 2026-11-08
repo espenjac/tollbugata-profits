@@ -40,6 +40,8 @@ simulatorkjøringen. `0005_market_calendar.sql` legger til kalenderfunksjonen
 som begrenser jobben til faktiske handledager på Oslo Børs.
 `0006_simulator_open_delay.sql` flytter første kjøring til 09:05, slik at
 åpningsauksjonen er ferdig før simulatoren bruker en kurs.
+`0007_simulator_benchmark.sql` lagrer OSEBX-indeksen sammen med hver
+egenkapitalmåling, slik at grafen kan sammenligne porteføljene med børsen.
 
 ## 3. Google-innlogging
 
@@ -176,7 +178,8 @@ curl -X POST \
 ```
 
 Du kan også se og oppdatere resultatene i appens `/simulator`-fane. Grafen
-bruker `sim_equity_daily`, som viser siste simulerte verdi per handledag.
+bruker `sim_equity_daily`, som viser siste simulerte verdi per handledag, og
+tegner OSEBX-indeksen normalisert til samme 5 000 kr-startverdi.
 
 ## 6. GitHub Pages
 

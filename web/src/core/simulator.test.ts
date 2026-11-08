@@ -72,6 +72,7 @@ function makeSnapshot(stocks: Stock[], now: Date = NOW): MarketSnapshot {
   return {
     universe,
     news: emptyNewsFeed(now, new Date(now.getTime() - 864e5), null),
+    benchmark: null,
     generatedAt: now,
   };
 }
