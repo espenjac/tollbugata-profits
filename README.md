@@ -17,9 +17,10 @@ Aktiv app er en statisk React-PWA:
 - **Supabase Auth med Google** for eier og inviterte brukere.
 - **Supabase Postgres** med RLS for konto, handler, saldojusteringer,
   rapporter, innstillinger og papirhandel.
-- **To Edge Functions**: `market-snapshot` henter TradingView, Euronext Growth
-  og NewsWeb server-side og cacher svarene, mens `simulator-tick` kjører
-  papirhandlerne på en `pg_cron`-plan. NewsWeb blokkerer nettleser-CORS, derfor
+- **Tre Edge Functions**: `market-snapshot` henter TradingView, Euronext Growth
+  og NewsWeb server-side og cacher svarene, `simulator-tick` kjører
+  papirhandlerne på en `pg_cron`-plan, og `nordnet-quote` henter siste Nordnet-kurs
+  til kjøpsknappene i journalen. NewsWeb blokkerer nettleser-CORS, derfor
   må markedsdata gå via Supabase.
 - **GitHub Pages** publiserer `web/dist` uten eget domene.
 - **PWA** med manifest, service worker og SPA-fallback via `404.html`.
@@ -72,6 +73,10 @@ Oppsett:
   saldojustering og beholdning. Åpne posisjoner viser «Selg ved» med
   gevinstmål og stop regnet fra faktisk snittkost, hvor mange handledager
   posisjonen er holdt, og et tidsstopp-varsel etter 5 handledager.
+- Kjøpsknapper på alle handlingsklare kandidater i både den vanlige rapporten
+  og Etrade-fanen. Knappen henter siste Nordnet-kurs og åpner journalen med
+  ticker, kurs og tidspunkt forhåndsutfylt. Du kontrollerer alltid antall og
+  lagrer selv; ingen ordre sendes.
 - Mobilvennlig PWA som kan installeres på hjemskjermen.
 
 ## Viktige avgrensninger

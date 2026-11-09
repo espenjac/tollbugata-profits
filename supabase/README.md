@@ -10,6 +10,8 @@ Appen bruker Supabase til:
 - Edge Function `market-snapshot`, som henter TradingView, Euronext Growth og
   NewsWeb server-side fordi NewsWeb blokkerer nettleser-CORS.
 - Edge Function `simulator-tick`, som kjører papirhandlene på en `pg_cron`-plan.
+- Edge Function `nordnet-quote`, som henter siste Nordnet-kurs til
+  kjøpsknappene i journalen.
 
 ## 1. Opprett prosjekt
 
@@ -71,23 +73,31 @@ egenkapitalmåling, slik at grafen kan sammenligne porteføljene med børsen.
    til en ny bruker senere, slå midlertidig på registrering, la brukeren logge
    inn, og slå den av igjen.
 
-## 4. Deploy Edge Function
+## 4. Deploy Edge Functions
 
 ```bash
 supabase secrets set ALLOWED_EMAILS=<eierens-google-epost>,<annen-bruker>
 supabase functions deploy market-snapshot
+supabase functions deploy nordnet-quote
 ```
 
 `SUPABASE_URL` og `SUPABASE_SERVICE_ROLE_KEY` settes automatisk av Supabase.
 `ALLOWED_EMAILS` er en kommaseparert liste over kontoer som får bruke
-markedsfunksjonen. `OWNER_EMAIL` støttes fortsatt som fallback for én adresse.
-Uten noen av dem kan alle autentiserte brukere kalle funksjonen. Kontoer som
-ikke står i listen får 403, og appen viser «Denne kontoen har ikke tilgang.
-Kontakt eieren for å bli lagt til.»
+markedsfunksjonen og Nordnet-kursen. `OWNER_EMAIL` støttes fortsatt som fallback
+for én adresse. Uten noen av dem kan alle autentiserte brukere kalle
+funksjonene. Kontoer som ikke står i listen får 403, og appen viser «Denne
+kontoen har ikke tilgang. Kontakt eieren for å bli lagt til.»
 
 Funksjonen cacher TradingView i 10 minutter, NewsWeb i 5 minutter og
 Euronext Growth i 24 timer. Ved feil brukes gammel cache med advarsel når den
 finnes.
+
+`nordnet-quote` tar `{ "ticker": "EQNR", "slug": "equinor-eqnr-xosl" }` og
+returnerer siste kurs, bid, ask, sluttkurs og tidsstempel. Nordnet har ingen
+åpen, uautentisert kurs-API, så funksjonen leser prissnapshottet som ligger i
+den offentlige aksjesiden. Når markedet er stengt og Nordnet rapporterer
+`last: 0`, brukes siste sluttkurs. Funksjonen krever innlogget bruker og samme
+allowlist som `market-snapshot`.
 
 ## 5. Simulator og pg_cron
 

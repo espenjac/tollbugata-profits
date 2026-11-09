@@ -3,6 +3,7 @@ export * from "./dates";
 export * from "./etrade";
 export * from "./format";
 export * from "./journal";
+export * from "./journalPrefill";
 export * from "./market";
 export * from "./news";
 export * from "./nordnet";

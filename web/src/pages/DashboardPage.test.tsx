@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { render, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../core/config";
 import { parseScannerPayload } from "../core/market";
@@ -104,7 +105,11 @@ describe("DashboardPage", () => {
       },
     ];
 
-    const { container } = render(<DashboardPage />);
+    const { container } = render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>,
+    );
     await waitFor(() => {
       expect(container.textContent).toContain("Dagens hovedkandidat");
     });
@@ -128,7 +133,11 @@ describe("DashboardPage", () => {
     mockState.journal = data.journal;
     mockState.history = [];
 
-    const { container } = render(<DashboardPage />);
+    const { container } = render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>,
+    );
     await waitFor(() => {
       expect(container.textContent).toContain("Kunne ikke laste markedet");
     });

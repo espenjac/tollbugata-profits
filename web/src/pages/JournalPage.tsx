@@ -1,4 +1,5 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import { DEFAULT_SETTINGS } from "../core/config";
 import { formatDateTime, formatMoney, formatNumber, formatPrice } from "../core/format";
 import {
@@ -11,6 +12,10 @@ import {
   type TradeEntry,
   type TradeInput,
 } from "../core/journal";
+import {
+  parseJournalPrefill,
+  type JournalPrefill,
+} from "../core/journalPrefill";
 import { useAuth } from "../lib/auth-context";
 import { useJournal } from "../lib/useJournal";
 import {
@@ -73,6 +78,18 @@ function formFromTrade(trade: TradeEntry): TradeForm {
   };
 }
 
+function formFromPrefill(prefill: JournalPrefill | null): TradeForm {
+  if (!prefill) {
+    return emptyTradeForm();
+  }
+  return {
+    ...emptyTradeForm("buy"),
+    ticker: prefill.ticker,
+    price: prefill.price.toFixed(2),
+    executedAt: toLocalInput(prefill.time),
+  };
+}
+
 function inputNumber(value: string): number {
   return Number(value.replace(",", "."));
 }
@@ -101,13 +118,29 @@ export function JournalPage() {
     reload,
   } = useJournal(userId);
 
-  const [form, setForm] = useState<TradeForm>(() => emptyTradeForm());
+  const [searchParams, setSearchParams] = useSearchParams();
+  const prefill = useMemo(
+    () => parseJournalPrefill(searchParams),
+    [searchParams],
+  );
+
+  const [form, setForm] = useState<TradeForm>(() => formFromPrefill(prefill));
   const [editId, setEditId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [cashForm, setCashForm] = useState({ amount: "", note: "" });
   const [cashError, setCashError] = useState<string | null>(null);
   const [cashSaving, setCashSaving] = useState(false);
+
+  useEffect(() => {
+    if (!prefill) {
+      return;
+    }
+    // oxlint-disable-next-line react/set-state-in-effect -- prefill comes from the URL and must reset the form on navigation
+    setForm(formFromPrefill(prefill));
+    setEditId(null);
+    setFormError(null);
+  }, [prefill]);
 
   const summary = useMemo(
     () => (journal ? summarizeJournal(journal) : null),
@@ -191,6 +224,9 @@ export function JournalPage() {
       }
       setForm(emptyTradeForm());
       setEditId(null);
+      if (prefill) {
+        setSearchParams({}, { replace: true });
+      }
     } catch (submitError) {
       setFormError(
         submitError instanceof Error ? submitError.message : String(submitError),
@@ -281,6 +317,13 @@ export function JournalPage() {
 
       {error ? <InlineNotice kind="error">{error}</InlineNotice> : null}
       {status ? <InlineNotice kind="success">{status}</InlineNotice> : null}
+      {prefill && !editId ? (
+        <InlineNotice kind="info">
+          Forhåndsutfylt fra Nordnet: {prefill.ticker} til{" "}
+          {formatPrice(prefill.price)} kr. Kontroller antall, kurs og tidspunkt
+          før du lagrer.
+        </InlineNotice>
+      ) : null}
 
       <section className="stats-grid" aria-label="Dagbokstatus">
         <StatCard label="Ledig kapital" value={formatMoney(summary.availableCash, 2)} />

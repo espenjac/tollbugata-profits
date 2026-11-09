@@ -9,7 +9,7 @@ import {
   formatPct,
   formatPrice,
 } from "../core/format";
-import { nordnetUrl } from "../core/nordnet";
+import { nordnetSlug, nordnetUrl } from "../core/nordnet";
 import { forStock, uniqueNews, type NewsFeed } from "../core/news";
 import { isAtHigh } from "../core/screen";
 import {
@@ -20,6 +20,7 @@ import {
   type TradePlan,
 } from "../core/types";
 import { CategoryChips, InlineNotice, SentimentBadge } from "./ui";
+import { BuyButton } from "./BuyButton";
 
 export function ReportView({
   report,
@@ -311,7 +312,12 @@ function CandidateCard({
             />
           </div>
         </div>
-        <CandidateDetails planned={planned} report={report} news={news} />
+        <CandidateDetails
+          planned={planned}
+          report={report}
+          news={news}
+          buyable
+        />
       </article>
     );
   }
@@ -338,7 +344,12 @@ function CandidateCard({
           </div>
         </div>
       </summary>
-      <CandidateDetails planned={planned} report={report} news={news} />
+      <CandidateDetails
+        planned={planned}
+        report={report}
+        news={news}
+        buyable={variant !== "blocked"}
+      />
     </details>
   );
 }
@@ -347,10 +358,12 @@ function CandidateDetails({
   planned,
   report,
   news,
+  buyable,
 }: {
   planned: PlannedCandidate;
   report: MarketReport;
   news: NewsFeed | null;
+  buyable: boolean;
 }) {
   const candidate = planned.candidate;
   const stock = candidate.stock;
@@ -438,6 +451,10 @@ function CandidateDetails({
           <small>etter kurtasje</small>
         </div>
       </div>
+
+      {buyable ? (
+        <BuyButton ticker={stock.ticker} slug={nordnetSlug(stock)} />
+      ) : null}
 
       {swing ? (
         <div className="swing-note">

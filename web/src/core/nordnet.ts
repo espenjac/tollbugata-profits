@@ -28,9 +28,12 @@ function guessSlug(stock: Stock): string {
   return `${name}-${stock.ticker.toLowerCase()}-xosl`;
 }
 
+export function nordnetSlug(stock: Stock): string {
+  return slugMap.get(stock.ticker.toUpperCase()) ?? guessSlug(stock);
+}
+
 export function nordnetUrl(stock: Stock): string {
-  const slug = slugMap.get(stock.ticker.toUpperCase()) ?? guessSlug(stock);
-  return NORDNET_BASE + slug;
+  return NORDNET_BASE + nordnetSlug(stock);
 }
 
 export function nordnetUrlForTicker(ticker: string): string | null {

@@ -22,7 +22,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
         <nav className="main-nav" aria-label="Hovedmeny">
           <NavLink to="/" end>
-            Kursinformasjon
+            Legacy anbefaling
           </NavLink>
           <NavLink to="/etrade">Etrade</NavLink>
           <NavLink to="/simulator">Simulator</NavLink>

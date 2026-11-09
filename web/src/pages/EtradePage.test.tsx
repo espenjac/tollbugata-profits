@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { render } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../core/config";
 import { buildEtradeReport } from "../core/etrade";
@@ -97,12 +98,17 @@ function makeReport(stocks: Stock[]) {
 describe("EtradePage", () => {
   it("renders a fresh idea with trigger, stop, targets and plan rules", () => {
     mockState.report = makeReport([makeStock()]);
-    const { container } = render(<EtradePage />);
+    const { container } = render(
+      <MemoryRouter>
+        <EtradePage />
+      </MemoryRouter>,
+    );
     const text = container.textContent ?? "";
 
     expect(text).toContain("Etrade-modus");
     expect(text).toContain("Dagens Etrade-ideer");
     expect(text).toContain("TEST");
+    expect(text).toContain("Kjøp");
     expect(text).toContain("Kjøp over");
     expect(text).toContain("Stopp");
     expect(text).toContain("T1");
@@ -115,7 +121,11 @@ describe("EtradePage", () => {
 
   it("shows watchlist ideas with the blocking reason", () => {
     mockState.report = makeReport([makeStock({ rsi: 80 })]);
-    const { container } = render(<EtradePage />);
+    const { container } = render(
+      <MemoryRouter>
+        <EtradePage />
+      </MemoryRouter>,
+    );
     const text = container.textContent ?? "";
 
     expect(text).toContain("Ingen Etrade-ideer akkurat nå");

@@ -11,7 +11,7 @@ import {
 import { osloDateString } from "../core/dates";
 import type { EtradeIdea, EtradeReport } from "../core/etrade";
 import { forStock, uniqueNews, type NewsFeed } from "../core/news";
-import { nordnetUrl } from "../core/nordnet";
+import { nordnetSlug, nordnetUrl } from "../core/nordnet";
 import { marketSession, marketSessionLabel } from "../core/session";
 import { atrPct } from "../core/types";
 import { useAuth } from "../lib/auth-context";
@@ -22,6 +22,7 @@ import {
   LoadingView,
   SentimentBadge,
 } from "../components/ui";
+import { BuyButton } from "../components/BuyButton";
 
 export function EtradePage() {
   const { user } = useAuth();
@@ -300,7 +301,12 @@ export function EtradeIdeaCard({
             </div>
           </div>
         </summary>
-        <EtradeIdeaDetails idea={idea} news={news} today={today} />
+        <EtradeIdeaDetails
+          idea={idea}
+          news={news}
+          today={today}
+          buyable={variant !== "watchlist"}
+        />
       </details>
     );
   }
@@ -321,7 +327,12 @@ export function EtradeIdeaCard({
           <small>R/R {formatRewardRisk(idea.rewardRisk)}</small>
         </div>
       </div>
-      <EtradeIdeaDetails idea={idea} news={news} today={today} />
+      <EtradeIdeaDetails
+        idea={idea}
+        news={news}
+        today={today}
+        buyable
+      />
     </article>
   );
 }
@@ -330,10 +341,12 @@ function EtradeIdeaDetails({
   idea,
   news,
   today,
+  buyable,
 }: {
   idea: EtradeIdea;
   news: NewsFeed | null;
   today: string;
+  buyable: boolean;
 }) {
   const stock = idea.candidate.stock;
   const candidate = idea.candidate;
@@ -401,6 +414,10 @@ function EtradeIdeaDetails({
         {idea.shares} aksjer · {formatMoney(idea.totalCost)} inkl. kurtasje ·{" "}
         {formatMoney(idea.cashLeft)} igjen av kapitalen
       </p>
+
+      {buyable ? (
+        <BuyButton ticker={stock.ticker} slug={nordnetSlug(stock)} />
+      ) : null}
 
       <div className="etrade-plan-note">
         <strong>Plan – observer – utfør:</strong>{" "}

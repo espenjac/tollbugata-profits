@@ -94,6 +94,44 @@ export async function fetchMarketSnapshot(): Promise<MarketSnapshot> {
   return parseMarketSnapshot(data ?? {});
 }
 
+export interface NordnetQuote {
+  ticker: string;
+  slug: string;
+  last: number;
+  bid: number | null;
+  ask: number | null;
+  close: number | null;
+  timestamp: string | null;
+  fetchedAt: string;
+  source: "nordnet";
+}
+
+/**
+ * Fetches the last Nordnet price for a stock. Nordnet has no public quote
+ * endpoint without a session, so an Edge Function reads the price snapshot
+ * embedded in the public stock page.
+ */
+export async function fetchNordnetQuote(
+  ticker: string,
+  slug: string,
+): Promise<NordnetQuote> {
+  const client = requireSupabase();
+  const { data, error } = await client.functions.invoke<NordnetQuote>(
+    "nordnet-quote",
+    {
+      method: "POST",
+      body: { ticker, slug },
+    },
+  );
+  if (error) {
+    throw new Error(await edgeFunctionErrorMessage(error));
+  }
+  if (!data || !Number.isFinite(data.last) || data.last <= 0) {
+    throw new Error("Nordnet svarte uten en gyldig siste kurs.");
+  }
+  return data;
+}
+
 function payloadForReport(report: MarketReport): Record<string, unknown> {
   return JSON.parse(JSON.stringify(report)) as Record<string, unknown>;
 }

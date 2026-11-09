@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { fireEvent, render } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "../core/config";
 import { parseScannerPayload } from "../core/market";
@@ -54,7 +55,11 @@ function makeReport() {
 describe("dashboard components", () => {
   it("renders the main candidate, alternatives and blocked candidates", () => {
     const { report, news } = makeReport();
-    const { container } = render(<ReportView report={report} news={news} />);
+    const { container } = render(
+      <MemoryRouter>
+        <ReportView report={report} news={news} />
+      </MemoryRouter>,
+    );
     const text = container.textContent ?? "";
 
     expect(text).toContain("Dagens hovedkandidat");

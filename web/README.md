@@ -21,7 +21,8 @@ samme base-path som GitHub Pages.
 
 - Node 22 eller nyere.
 - En Supabase-project med Google-innlogging.
-- Edge Functions `market-snapshot` og `simulator-tick` deployet.
+- Edge Functions `market-snapshot`, `simulator-tick` og `nordnet-quote`
+  deployet.
 - GitHub Pages satt til **GitHub Actions** som kilde.
 
 ## Kommandoer
@@ -63,6 +64,14 @@ npm run preview    # forhåndsvis produksjonsbygget
 - `src/pages/JournalPage.tsx` er `/logg`. Den henter bare Supabase-data og
   kontakter aldri markeds-API-ene. Åpne posisjoner viser gevinstmål og stop
   regnet fra faktisk snittkost, antall handledager og tidsstopp etter 5 dager.
+  Journalen leser også `?ticker=`, `?price=` og `?time=` fra kjøpsknappene og
+  forhåndsutfyller skjemaet uten å lagre noe før du selv trykker «Loggfør
+  handel».
+- `src/components/BuyButton.tsx` brukes på handlingsklare kandidater i
+  rapporten og Etrade-fanen. Den kaller `nordnet-quote` for siste Nordnet-kurs,
+  viser en feilmelding hvis kursen ikke kan hentes, og navigerer først etter at
+  kursen er mottatt. `src/core/journalPrefill.ts` bygger og parser URL-en, mens
+  `src/core/nordnet.ts` gir Nordnet-slug per ticker.
 - `src/core/simulator.ts` inneholder papirhandel-logikken for Swing og Etrade.
   Begge modusene har 5 000 kr, eier maks én aksje og betaler 29 kr i kurtasje
   hver vei. `src/core/edge.ts` eksporterer den delte kjernen til
@@ -86,8 +95,8 @@ alle tre oppdateres, sammen med Supabase redirect-URL-er og GitHub Pages-URL.
 
 - RLS på alle brukertabeller, begrenset til `auth.uid()`.
 - `market_cache` er bare tilgjengelig for service role.
-- `market-snapshot` validerer JWT, og kan i tillegg begrenses med
-  `ALLOWED_EMAILS`.
+- `market-snapshot` og `nordnet-quote` validerer JWT, og kan i tillegg
+  begrenses med `ALLOWED_EMAILS`.
 - `service_role` skal aldri inn i frontend, GitHub eller `.env.local`.
 
 Se `../supabase/README.md` for oppsett av database, Google OAuth, Edge Function

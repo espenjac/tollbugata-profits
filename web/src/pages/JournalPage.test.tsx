@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { render, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { JournalState } from "../core/journal";
 import { JournalPage } from "./JournalPage";
 
@@ -55,8 +56,16 @@ vi.mock("../lib/api", () => ({
 }));
 
 describe("JournalPage", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   it("renders balances, positions, trades and manual entry forms", async () => {
-    const { container } = render(<JournalPage />);
+    const { container } = render(
+      <MemoryRouter>
+        <JournalPage />
+      </MemoryRouter>,
+    );
     await waitFor(() => {
       expect(container.textContent).toContain("Handelsdagbok");
     });
@@ -69,5 +78,32 @@ describe("JournalPage", () => {
     expect(text).toContain("EQNR");
     expect(text).toContain("testsalg");
     expect(text).toContain("5 383,00 kr");
+  });
+
+  it("prefills ticker, Nordnet price and time from the buy link", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[
+          "/logg?ticker=eqnr&price=394.90&time=2026-11-08T13:37:00.000Z",
+        ]}
+      >
+        <JournalPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect((screen.getByLabelText("Ticker") as HTMLInputElement).value).toBe(
+        "EQNR",
+      );
+    });
+    expect((screen.getByLabelText("Kurs") as HTMLInputElement).value).toBe(
+      "394.90",
+    );
+    expect(
+      (screen.getByLabelText("Utført") as HTMLInputElement).value,
+    ).toMatch(/^2026-11-08T\d{2}:37$/);
+    expect(screen.getByText(/Forhåndsutfylt fra Nordnet/).textContent).toContain(
+      "Forhåndsutfylt fra Nordnet",
+    );
   });
 });
