@@ -80,7 +80,10 @@ export interface Settings {
 export const DEFAULT_SCORING_CONFIG: ScoringConfig = {
   minPrice: 5,
   minMarketCap: 300_000_000,
-  minAverageTurnover: 5_000_000,
+  // Oslo Børs is small; 3 mill. kr per day is enough for a 5 000 kr retail
+  // position. A higher floor removes many liquid mid-caps without improving
+  // execution for this order size.
+  minAverageTurnover: 3_000_000,
   maxWeekReturn: 0.25,
   maxRsi: 82,
   targetAtrPct: 0.025,

@@ -465,6 +465,9 @@ function EtradeIdeaDetails({
               {candidate.volumeRatio === null
                 ? "–"
                 : `${formatNumber(candidate.volumeRatio, 1)}×`}
+              {idea.volumePace !== null
+                ? ` (${formatNumber(idea.volumePace, 1)}× av forventet så langt)`
+                : ""}
             </li>
             <li>ATR: {formatPct(atrPct(stock))}</li>
             <li>Neste resultat: {earningsText}</li>

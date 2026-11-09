@@ -506,7 +506,7 @@ function riskComponents(
   let liquidity: number;
   if (turnover === null) {
     liquidity = 0.6;
-  } else if (turnover < 5_000_000) {
+  } else if (turnover < config.minAverageTurnover) {
     liquidity = 1;
   } else if (turnover < 10_000_000) {
     liquidity = 0.7;

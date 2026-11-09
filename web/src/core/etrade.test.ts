@@ -48,14 +48,18 @@ function makeUniverse(stocks: Stock[]): Universe {
   };
 }
 
-function makeReport(stocks: Stock[], settings: Settings = DEFAULT_SETTINGS) {
+function makeReport(
+  stocks: Stock[],
+  settings: Settings = DEFAULT_SETTINGS,
+  now = new Date("2026-11-05T10:00:00+01:00"),
+) {
   return buildEtradeReport(
     stocks,
     makeUniverse(stocks),
     null,
     settings,
     "2026-11-05",
-    new Date("2026-11-05T10:00:00+01:00"),
+    now,
   );
 }
 
@@ -120,6 +124,29 @@ describe("buildEtradeReport", () => {
     expect(report.ideas).toHaveLength(0);
     expect(report.watchlist).toHaveLength(0);
     expect(report.noIdeaReason).toContain("Ingen aksjer passerte");
+  });
+
+  it("uses time-weighted volume so a liquid stock is not blocked at the open", () => {
+    const stock = makeStock({
+      volume: 80_000,
+      averageVolume10d: 800_000,
+    });
+    const morning = new Date("2026-11-05T09:30:00+01:00");
+    const early = makeReport([stock], DEFAULT_SETTINGS, morning);
+    const midday = makeReport(
+      [stock],
+      DEFAULT_SETTINGS,
+      new Date("2026-11-05T12:00:00+01:00"),
+    );
+
+    expect(early.ideas).toHaveLength(1);
+    expect(early.ideas[0].volumePace).toBeCloseTo(0.1 / 0.13, 2);
+    expect(early.ideas[0].blockReasons).toEqual([]);
+
+    expect(midday.ideas).toHaveLength(0);
+    expect(midday.watchlist[0].blockReasons.join(" ")).toContain(
+      "under forventet",
+    );
   });
 
   it("orders ideas by Etrade score", () => {

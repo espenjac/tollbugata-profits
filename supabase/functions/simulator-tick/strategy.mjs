@@ -2,7 +2,7 @@ var DEFAULT_SETTINGS = {
 	scoring: {
 		minPrice: 5,
 		minMarketCap: 3e8,
-		minAverageTurnover: 5e6,
+		minAverageTurnover: 3e6,
 		maxWeekReturn: .25,
 		maxRsi: 82,
 		targetAtrPct: .025,
@@ -1461,7 +1461,7 @@ function riskComponents(stock, signal, today, config) {
 	const turnover = averageTurnover(stock);
 	let liquidity;
 	if (turnover === null) liquidity = .6;
-	else if (turnover < 5e6) liquidity = 1;
+	else if (turnover < config.minAverageTurnover) liquidity = 1;
 	else if (turnover < 1e7) liquidity = .7;
 	else if (turnover < 3e7) liquidity = .4;
 	else if (turnover < 1e8) liquidity = .15;
@@ -1710,6 +1710,74 @@ function emptyPlan(config, price, atrPctValue) {
 		feasible: false
 	};
 }
+// src/core/volume.ts
+var SESSION_OPEN_MINUTES = 540;
+var SESSION_CLOSE_MINUTES = 990;
+/**
+* Approximate share of a normal Oslo Børs day that has traded by a given time.
+*
+* The scanner reports today's cumulative volume, while the comparison value is
+* a full-day 10-day average. A simple linear curve would make every stock look
+* quiet in the morning and busy at the close. Oslo is U-shaped: the opening and
+* closing hours carry more volume than the middle of the day. The points below
+* are deliberately rough; they only need to keep the volume gate from rejecting
+* every liquid stock before lunch.
+*/
+var CUMULATIVE_VOLUME_SHARE = [
+	[SESSION_OPEN_MINUTES, 0],
+	[570, .13],
+	[600, .21],
+	[660, .33],
+	[720, .43],
+	[780, .52],
+	[840, .62],
+	[900, .73],
+	[960, .88],
+	[SESSION_CLOSE_MINUTES, 1]
+];
+function interpolate(minutes) {
+	for (let index = 1; index < CUMULATIVE_VOLUME_SHARE.length; index += 1) {
+		const [endMinute, endShare] = CUMULATIVE_VOLUME_SHARE[index];
+		if (minutes <= endMinute) {
+			const [startMinute, startShare] = CUMULATIVE_VOLUME_SHARE[index - 1];
+			const span = endMinute - startMinute;
+			if (span <= 0) return endShare;
+			const progress = (minutes - startMinute) / span;
+			return startShare + (endShare - startShare) * progress;
+		}
+	}
+	return 1;
+}
+/**
+* How much of a normal trading day's volume has printed by `now` (0–1).
+* Outside the session the day is complete, so the share is 1. Before the
+* opening auction it is 0 because there is no meaningful pace yet.
+*/
+function expectedVolumeShare(now = /* @__PURE__ */ new Date()) {
+	const session = marketSession(now);
+	if (session === "closed") return 1;
+	if (session === "pre") return 0;
+	const parts = osloParts(now);
+	return interpolate(Math.max(SESSION_OPEN_MINUTES, Math.min(SESSION_CLOSE_MINUTES, parts.hour * 60 + parts.minute)));
+}
+/**
+* Converts a raw cumulative volume ratio (today's volume divided by the
+* 10-day average daily volume) into a pace ratio relative to the time of day.
+*
+* A pace of 1 means the stock has traded exactly on its normal pace, 0.7 means
+* it is 30 % behind, and 2 means twice the normal pace. This is the value that
+* should be compared with fixed thresholds; comparing the raw ratio early in
+* the day rejects liquid stocks simply because the session has just started.
+*
+* Returns null when there is no meaningful volume signal. Outside the session
+* the raw ratio is returned unchanged.
+*/
+function timeWeightedVolumeRatio(rawRatio, now = /* @__PURE__ */ new Date()) {
+	if (rawRatio === null || !Number.isFinite(rawRatio) || rawRatio < 0) return null;
+	const share = expectedVolumeShare(now);
+	if (share <= 0) return null;
+	return rawRatio / share;
+}
 var ETRADE_MIN_STOP_PCT = .03;
 var ETRADE_MAX_STOP_PCT = .05;
 var ETRADE_TARGET_MULTIPLES = [
@@ -1767,10 +1835,10 @@ function chooseSetup(candidate) {
 		invalidation: dayHigh * .995
 	};
 }
-function scoreIdea(candidate, setup, trigger, volumeRatio) {
+function scoreIdea(candidate, setup, trigger, volumePace) {
 	const stock = candidate.stock;
 	const proximity = stock.close > 0 ? clamp(1 - Math.abs(trigger / stock.close - 1) / .06) : 0;
-	const volume = volumeRatio === null ? .35 : clamp((volumeRatio - .5) / 1.5);
+	const volume = volumePace === null ? .35 : clamp((volumePace - .5) / 1.5);
 	const setupBonus = {
 		breakout: 8,
 		news: 6,
@@ -1781,24 +1849,24 @@ function scoreIdea(candidate, setup, trigger, volumeRatio) {
 	const newsBonus = candidate.newsSignal.count > 0 && candidate.newsSignal.sentiment === "positive" ? 4 : 0;
 	return clamp(candidate.score * .6 + candidate.opportunityScore * .4 + setupBonus[setup] + 10 * volume + 5 * proximity + newsBonus - (overextended ? 10 : 0), 0, 100);
 }
-function ideaWarnings(candidate, atrKnown, today) {
+function ideaWarnings(candidate, atrKnown, today, volumePace) {
 	const stock = candidate.stock;
 	const values = [];
 	if (!atrKnown) values.push("ATR mangler – stoppen bruker 4 % fallback. Kontroller nivået manuelt.");
 	if ((stock.rsi ?? 0) >= 75) values.push("RSI over 75 – vent på en kontrollert pause før du kjøper.");
 	if ((stock.dayReturn ?? 0) >= .05) values.push("Stor dagbevegelse – ikke jag prisen. Vent på trigger og volum.");
-	if (candidate.volumeRatio !== null && candidate.volumeRatio < 1) values.push("Volumet er under snittet – krever bekreftelse før inngang.");
+	if (volumePace !== null && volumePace < 1) values.push("Volumet er under forventet så langt i dag – krever bekreftelse før inngang.");
 	const earnings = daysUntil(stock.earningsDate, today);
 	if (earnings !== null && earnings >= 0 && earnings <= 5) values.push(`Resultat om ${earnings === 0 ? "i dag" : `${earnings} dager`} – høyere gaprisiko.`);
 	if (stock.close < 10) values.push("Lav aksjekurs – større prosentvise utslag og spreadrisiko.");
 	return values;
 }
-function ideaBlockReasons(candidate, targets, rewardRisk, today) {
+function ideaBlockReasons(candidate, targets, rewardRisk, today, volumePace) {
 	const stock = candidate.stock;
 	const values = [];
 	if (targets.length === 0 || targets[0].net <= 0) values.push("første mål dekker ikke kurtasjen");
 	if (rewardRisk === null || rewardRisk < 1) values.push("gevinst/tap under 1:1 etter kurtasje");
-	if (candidate.volumeRatio !== null && candidate.volumeRatio < .7) values.push("volumet er under snittet");
+	if (volumePace !== null && volumePace < .7) values.push("volumet er under forventet så langt i dag");
 	if (stock.rsi !== null && stock.rsi >= 75) values.push("RSI over 75 – overopphetet");
 	if ((stock.weekReturn ?? 0) >= .2) values.push("uken er svært strukket");
 	if ((stock.dayReturn ?? 0) >= .08) values.push("stort dagshopp – jag ikke");
@@ -1808,9 +1876,10 @@ function ideaBlockReasons(candidate, targets, rewardRisk, today) {
 	if (candidate.newsSignal.count > 0 && candidate.newsSignal.sentiment === "negative") values.push("negativt nyhetsbilde");
 	return values;
 }
-function buildIdea(candidate, settings, today) {
+function buildIdea(candidate, settings, today, now) {
 	const stock = candidate.stock;
 	if (!Number.isFinite(stock.close) || stock.close <= 0) return null;
+	const volumePace = timeWeightedVolumeRatio(candidate.volumeRatio, now);
 	const config = settings.trade;
 	const setup = chooseSetup(candidate);
 	const entry = setup.trigger * (1 + Math.max(0, config.slippagePct));
@@ -1837,11 +1906,11 @@ function buildIdea(candidate, settings, today) {
 	});
 	const stopNet = netTradeResult(shares, entry, stopPrice, config);
 	const rewardRisk = stopNet < 0 && targets[0] !== void 0 && targets[0].net > 0 ? targets[0].net / Math.abs(stopNet) : null;
-	const blockReasons = ideaBlockReasons(candidate, targets, rewardRisk, today);
+	const blockReasons = ideaBlockReasons(candidate, targets, rewardRisk, today, volumePace);
 	const checks = [
 		{
-			label: "Volum over snitt",
-			ok: candidate.volumeRatio !== null && candidate.volumeRatio >= .8
+			label: "Volum over forventet",
+			ok: volumePace !== null && volumePace >= .8
 		},
 		{
 			label: "RSI under 75",
@@ -1881,14 +1950,15 @@ function buildIdea(candidate, settings, today) {
 		targets,
 		rewardRisk,
 		horizonDays: 3,
-		score: scoreIdea(candidate, setup.setup, setup.trigger, candidate.volumeRatio),
+		score: scoreIdea(candidate, setup.setup, setup.trigger, volumePace),
+		volumePace,
 		checks,
 		blockReasons,
-		warnings: ideaWarnings(candidate, atr !== null, today)
+		warnings: ideaWarnings(candidate, atr !== null, today, volumePace)
 	};
 }
 function buildEtradeReport(stocks, universe, news, settings, today, now = /* @__PURE__ */ new Date()) {
-	const all = rankCandidates(stocks, 60, today, news, settings.scoring).map((candidate) => buildIdea(candidate, settings, today)).filter((idea) => idea !== null).sort((a, b) => b.score - a.score);
+	const all = rankCandidates(stocks, 60, today, news, settings.scoring).map((candidate) => buildIdea(candidate, settings, today, now)).filter((idea) => idea !== null).sort((a, b) => b.score - a.score);
 	const ideas = all.filter((idea) => idea.blockReasons.length === 0).slice(0, 6);
 	const watchlist = all.filter((idea) => idea.blockReasons.length > 0).slice(0, 6);
 	let noIdeaReason = null;

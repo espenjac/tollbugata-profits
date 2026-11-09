@@ -8,6 +8,7 @@ import { weekendFlag } from "./swing";
 import { netTradeResult } from "./trade";
 import type { Candidate, Stock, Universe } from "./types";
 import { atrPct } from "./types";
+import { timeWeightedVolumeRatio } from "./volume";
 
 /**
  * Etrade mode is a faster, chart-driven companion to the swing report.
@@ -66,6 +67,8 @@ export interface EtradeIdea {
   rewardRisk: number | null;
   horizonDays: number;
   score: number;
+  /** Cumulative volume relative to the normal pace at report time. */
+  volumePace: number | null;
   checks: EtradeCheck[];
   blockReasons: string[];
   warnings: string[];
@@ -159,7 +162,7 @@ function scoreIdea(
   candidate: Candidate,
   setup: EtradeSetup,
   trigger: number,
-  volumeRatio: number | null,
+  volumePace: number | null,
 ): number {
   const stock = candidate.stock;
   const proximity =
@@ -167,7 +170,7 @@ function scoreIdea(
       ? clamp(1 - Math.abs(trigger / stock.close - 1) / 0.06)
       : 0;
   const volume =
-    volumeRatio === null ? 0.35 : clamp((volumeRatio - 0.5) / 1.5);
+    volumePace === null ? 0.35 : clamp((volumePace - 0.5) / 1.5);
   const setupBonus: Record<EtradeSetup, number> = {
     breakout: 8,
     news: 6,
@@ -196,6 +199,7 @@ function ideaWarnings(
   candidate: Candidate,
   atrKnown: boolean,
   today: string,
+  volumePace: number | null,
 ): string[] {
   const stock = candidate.stock;
   const values: string[] = [];
@@ -210,8 +214,10 @@ function ideaWarnings(
   if ((stock.dayReturn ?? 0) >= 0.05) {
     values.push("Stor dagbevegelse – ikke jag prisen. Vent på trigger og volum.");
   }
-  if (candidate.volumeRatio !== null && candidate.volumeRatio < 1) {
-    values.push("Volumet er under snittet – krever bekreftelse før inngang.");
+  if (volumePace !== null && volumePace < 1) {
+    values.push(
+      "Volumet er under forventet så langt i dag – krever bekreftelse før inngang.",
+    );
   }
   const earnings = daysUntil(stock.earningsDate, today);
   if (earnings !== null && earnings >= 0 && earnings <= 5) {
@@ -230,6 +236,7 @@ function ideaBlockReasons(
   targets: EtradeTarget[],
   rewardRisk: number | null,
   today: string,
+  volumePace: number | null,
 ): string[] {
   const stock = candidate.stock;
   const values: string[] = [];
@@ -239,8 +246,8 @@ function ideaBlockReasons(
   if (rewardRisk === null || rewardRisk < 1) {
     values.push("gevinst/tap under 1:1 etter kurtasje");
   }
-  if (candidate.volumeRatio !== null && candidate.volumeRatio < 0.7) {
-    values.push("volumet er under snittet");
+  if (volumePace !== null && volumePace < 0.7) {
+    values.push("volumet er under forventet så langt i dag");
   }
   if (stock.rsi !== null && stock.rsi >= 75) {
     values.push("RSI over 75 – overopphetet");
@@ -271,11 +278,13 @@ function buildIdea(
   candidate: Candidate,
   settings: Settings,
   today: string,
+  now: Date,
 ): EtradeIdea | null {
   const stock = candidate.stock;
   if (!Number.isFinite(stock.close) || stock.close <= 0) {
     return null;
   }
+  const volumePace = timeWeightedVolumeRatio(candidate.volumeRatio, now);
   const config = settings.trade;
   const setup = chooseSetup(candidate);
   const entry = setup.trigger * (1 + Math.max(0, config.slippagePct));
@@ -314,11 +323,17 @@ function buildIdea(
     stopNet < 0 && targets[0] !== undefined && targets[0].net > 0
       ? targets[0].net / Math.abs(stopNet)
       : null;
-  const blockReasons = ideaBlockReasons(candidate, targets, rewardRisk, today);
+  const blockReasons = ideaBlockReasons(
+    candidate,
+    targets,
+    rewardRisk,
+    today,
+    volumePace,
+  );
   const checks: EtradeCheck[] = [
     {
-      label: "Volum over snitt",
-      ok: candidate.volumeRatio !== null && candidate.volumeRatio >= 0.8,
+      label: "Volum over forventet",
+      ok: volumePace !== null && volumePace >= 0.8,
     },
     { label: "RSI under 75", ok: (stock.rsi ?? 0) < 75 },
     { label: "Ikke strukket uke", ok: (stock.weekReturn ?? 0) < 0.2 },
@@ -358,10 +373,11 @@ function buildIdea(
     targets,
     rewardRisk,
     horizonDays: ETRADE_MAX_HOLDING_DAYS,
-    score: scoreIdea(candidate, setup.setup, setup.trigger, candidate.volumeRatio),
+    score: scoreIdea(candidate, setup.setup, setup.trigger, volumePace),
+    volumePace,
     checks,
     blockReasons,
-    warnings: ideaWarnings(candidate, atr !== null, today),
+    warnings: ideaWarnings(candidate, atr !== null, today, volumePace),
   };
 }
 
@@ -381,7 +397,7 @@ export function buildEtradeReport(
     settings.scoring,
   );
   const all = candidates
-    .map((candidate) => buildIdea(candidate, settings, today))
+    .map((candidate) => buildIdea(candidate, settings, today, now))
     .filter((idea): idea is EtradeIdea => idea !== null)
     .sort((a, b) => b.score - a.score);
 

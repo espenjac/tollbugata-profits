@@ -52,7 +52,10 @@ Oppsett:
 - **Etrade-modus** på `/etrade` er en egen fane med kortsiktige long-ideer i
   samme stil: «kjøp over»-trigger, stop, tre delmål, ugyldig-nivå og
   posisjonsstørrelse. Ideene bruker ATR-basert stop på 3–5 %, mål på 2R/3,5R/5R
-  og horisont 1–3 handledager. Kandidater som er overopphetet, har negativt
+  og horisont 1–3 handledager. Volum bekreftes mot forventet volum så langt i
+  handledagen, ikke mot et helt dagsgjennomsnitt, slik at likvide aksjer ikke
+  avvises bare fordi det er morgen. Absolutt likviditetsgulv er 3 mill. kr i
+  snittomsetning. Kandidater som er overopphetet, har negativt
   nyhetsbilde, resultat innen to dager eller mål som ikke dekker kurtasjen,
   havner på «På radaren» i stedet for i de klare ideene. Etrade-ideene lagres
   ikke som historikk og bygges på nytt fra ferskeste kurs hver gang. Modusen er
