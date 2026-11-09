@@ -104,6 +104,10 @@ interface TickContext {
   state: SimPortfolioState;
   trades: SimTrade[];
   sold: boolean;
+  /** Set when an existing pending order is cancelled this tick. Prevents an
+   * immediate re-entry for the same setup before the market has had time to
+   * confirm or reject it. */
+  pendingClosed: boolean;
 }
 
 function money(value: number): number {
@@ -432,10 +436,12 @@ function openEtrade(context: TickContext): void {
     );
     if (!stillValid) {
       state.pending = null;
+      context.pendingClosed = true;
     } else {
       const stock = stockFor(context.snapshot, pending.ticker);
       if (stock === null) {
         state.pending = null;
+        context.pendingClosed = true;
       } else {
         const price = stock.close;
         if (price >= pending.trigger) {
@@ -458,11 +464,13 @@ function openEtrade(context: TickContext): void {
           price <= pending.invalidation
         ) {
           state.pending = null;
+          context.pendingClosed = true;
         } else if (
           (tradingDaysHeld(pending.createdAt, context.now) ?? 0) >=
           pending.maxHoldingDays
         ) {
           state.pending = null;
+          context.pendingClosed = true;
         } else {
           return;
         }
@@ -470,7 +478,12 @@ function openEtrade(context: TickContext): void {
     }
   }
 
-  if (state.position !== null || state.pending !== null || best === null) {
+  if (
+    context.pendingClosed ||
+    state.position !== null ||
+    state.pending !== null ||
+    best === null
+  ) {
     return;
   }
   const stock = best.candidate.stock;
@@ -537,6 +550,7 @@ function tick(
     },
     trades: [],
     sold: false,
+    pendingClosed: false,
   };
 
   if (mode === "swing") {

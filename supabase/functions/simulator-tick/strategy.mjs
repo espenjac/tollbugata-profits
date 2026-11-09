@@ -1797,6 +1797,22 @@ function clamp(value, minimum = 0, maximum = 1) {
 function positive(value) {
 	return value !== null && value !== void 0 && Number.isFinite(value) && value > 0;
 }
+/**
+* Invalidation for a breakout must sit below the current price. The level just
+* below the breakout high is only a failure level after the breakout has
+* happened; before that the price is naturally below it, and the simulator
+* would refuse to place the pending order. Fall back to the nearest support
+* when the breakout level is above the last price.
+*/
+function breakoutInvalidation(level, support, close) {
+	const levelInvalidation = level * .995;
+	if (levelInvalidation < close) return levelInvalidation;
+	if (positive(support)) {
+		const supportInvalidation = support * .995;
+		if (supportInvalidation < close) return supportInvalidation;
+	}
+	return close * .997;
+}
 function chooseSetup(candidate) {
 	const stock = candidate.stock;
 	const close = stock.close;
@@ -1827,12 +1843,12 @@ function chooseSetup(candidate) {
 	if (keyHigh !== null) return {
 		setup: "breakout",
 		trigger: keyHigh * 1.003,
-		invalidation: keyHigh * .995
+		invalidation: breakoutInvalidation(keyHigh, candidate.support, close)
 	};
 	return {
 		setup: "breakout",
 		trigger: dayHigh * 1.003,
-		invalidation: dayHigh * .995
+		invalidation: breakoutInvalidation(dayHigh, candidate.support, close)
 	};
 }
 function scoreIdea(candidate, setup, trigger, volumePace) {
@@ -2446,11 +2462,15 @@ function openEtrade(context) {
 	const best = report.ideas[0] ?? null;
 	if (state.pending !== null) {
 		const pending = state.pending;
-		if (!report.ideas.some((idea) => idea.candidate.stock.ticker === pending.ticker)) state.pending = null;
-		else {
+		if (!report.ideas.some((idea) => idea.candidate.stock.ticker === pending.ticker)) {
+			state.pending = null;
+			context.pendingClosed = true;
+		} else {
 			const stock = stockFor(context.snapshot, pending.ticker);
-			if (stock === null) state.pending = null;
-			else {
+			if (stock === null) {
+				state.pending = null;
+				context.pendingClosed = true;
+			} else {
 				const price = stock.close;
 				if (price >= pending.trigger) {
 					executeBuy(context, {
@@ -2467,13 +2487,17 @@ function openEtrade(context) {
 					});
 					return;
 				}
-				if (pending.invalidation !== null && price <= pending.invalidation) state.pending = null;
-				else if ((tradingDaysHeld(pending.createdAt, context.now) ?? 0) >= pending.maxHoldingDays) state.pending = null;
-				else return;
+				if (pending.invalidation !== null && price <= pending.invalidation) {
+					state.pending = null;
+					context.pendingClosed = true;
+				} else if ((tradingDaysHeld(pending.createdAt, context.now) ?? 0) >= pending.maxHoldingDays) {
+					state.pending = null;
+					context.pendingClosed = true;
+				} else return;
 			}
 		}
 	}
-	if (state.position !== null || state.pending !== null || best === null) return;
+	if (context.pendingClosed || state.position !== null || state.pending !== null || best === null) return;
 	const stock = best.candidate.stock;
 	const price = stock.close;
 	if (best.invalidation !== null && price <= best.invalidation) return;
@@ -2527,7 +2551,8 @@ function tick(mode, state, snapshot, settings, now, today) {
 			pending: state.pending === null ? null : { ...state.pending }
 		},
 		trades: [],
-		sold: false
+		sold: false,
+		pendingClosed: false
 	};
 	if (mode === "swing") {
 		manageSwing(context);

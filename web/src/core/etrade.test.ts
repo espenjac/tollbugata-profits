@@ -82,6 +82,8 @@ describe("buildEtradeReport", () => {
     expect(idea.targets[0].pct).toBeGreaterThan(0.05);
     expect(idea.rewardRisk).not.toBeNull();
     expect(idea.rewardRisk!).toBeGreaterThan(1);
+    expect(idea.invalidation).not.toBeNull();
+    expect(idea.invalidation!).toBeLessThan(idea.candidate.stock.close);
     expect(idea.blockReasons).toEqual([]);
     expect(idea.checks.every((check) => check.ok)).toBe(true);
     expect(idea.shares).toBeGreaterThan(0);

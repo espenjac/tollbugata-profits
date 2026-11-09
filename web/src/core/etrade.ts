@@ -101,6 +101,31 @@ interface Setup {
   invalidation: number | null;
 }
 
+/**
+ * Invalidation for a breakout must sit below the current price. The level just
+ * below the breakout high is only a failure level after the breakout has
+ * happened; before that the price is naturally below it, and the simulator
+ * would refuse to place the pending order. Fall back to the nearest support
+ * when the breakout level is above the last price.
+ */
+function breakoutInvalidation(
+  level: number,
+  support: number | null,
+  close: number,
+): number {
+  const levelInvalidation = level * 0.995;
+  if (levelInvalidation < close) {
+    return levelInvalidation;
+  }
+  if (positive(support)) {
+    const supportInvalidation = support * 0.995;
+    if (supportInvalidation < close) {
+      return supportInvalidation;
+    }
+  }
+  return close * (1 - ETRADE_BREAKOUT_BUFFER);
+}
+
 function chooseSetup(candidate: Candidate): Setup {
   const stock = candidate.stock;
   const close = stock.close;
@@ -148,13 +173,13 @@ function chooseSetup(candidate: Candidate): Setup {
     return {
       setup: "breakout",
       trigger: keyHigh * (1 + ETRADE_BREAKOUT_BUFFER),
-      invalidation: keyHigh * 0.995,
+      invalidation: breakoutInvalidation(keyHigh, candidate.support, close),
     };
   }
   return {
     setup: "breakout",
     trigger: dayHigh * (1 + ETRADE_BREAKOUT_BUFFER),
-    invalidation: dayHigh * 0.995,
+    invalidation: breakoutInvalidation(dayHigh, candidate.support, close),
   };
 }
 
