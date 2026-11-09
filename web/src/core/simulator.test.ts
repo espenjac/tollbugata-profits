@@ -155,6 +155,7 @@ describe("runSimulatorTick", () => {
     expect(trades[0].ticker).toBe("TEST");
     expect(trades[0].fee).toBe(29);
     expect(trades[0].reason).toContain("Swing: TEST");
+    expect(trades[0].reason).toContain("Uke");
     expect(state.position?.ticker).toBe("TEST");
     expect(state.cash).toBeLessThan(5_000);
     expect(results.find((item) => item.mode === "swing")?.equity.equity).toBe(
@@ -181,6 +182,8 @@ describe("runSimulatorTick", () => {
     expect(buy.side).toBe("buy");
     expect(buy.fee).toBe(29);
     expect(buy.reason).toContain("Trend: TEST");
+    expect(buy.reason).toContain("SMA20 over SMA50");
+    expect(position?.reason).toContain("kvartal");
     expect(position?.entryPrice).toBe(101);
     expect(position?.maxHoldingDays).toBe(60);
     expect(position?.targets).toEqual([]);

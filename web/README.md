@@ -85,7 +85,8 @@ npm run preview    # forhåndsvis produksjonsbygget
   `supabase/functions/simulator-tick/strategy.mjs`.
 - `src/pages/SimulatorPage.tsx` er `/simulator`. Den viser alle tre porteføljene,
   en graf fra `sim_equity_daily` med OSEBX-indeksen normalisert til samme
-  startverdi, og separate kjøp/salg-tabs per modus.
+  startverdi, Nordnet-lenker fra tickere, kjøpsbegrunnelser og separate
+  kjøp/salg-tabs per modus.
   `src/lib/useSimulator.ts` oppdaterer visningen hvert minutt; selve
   papirhandelen kjøres av `pg_cron` hvert femte minutt på handledager fra
   09:05, og kalenderfunksjonen `oslo_market_open_day` holder jobben borte på

@@ -12,6 +12,7 @@ import {
   formatPct,
   formatPrice,
 } from "../core/format";
+import { nordnetUrlForTicker } from "../core/nordnet";
 import type { SimMode, SimPosition } from "../core/simulator";
 import {
   type SimulatorEquityPoint,
@@ -75,6 +76,24 @@ function statsFor(trades: SimulatorTradeRecord[]) {
   };
 }
 
+function SimulatorTickerLink({ ticker }: { ticker: string }) {
+  const href = nordnetUrlForTicker(ticker);
+  if (href === null) {
+    return <>{ticker}</>;
+  }
+  return (
+    <a
+      className="sim-ticker-link"
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`${ticker} hos Nordnet`}
+    >
+      {ticker}
+    </a>
+  );
+}
+
 function PositionSummary({
   mode,
   portfolio,
@@ -92,7 +111,8 @@ function PositionSummary({
       <div className="sim-position">
         <span className="sim-position-label">Åpen posisjon</span>
         <strong>
-          {position.ticker} · {formatNumber(position.shares)} aksjer
+          <SimulatorTickerLink ticker={position.ticker} /> · {" "}
+          {formatNumber(position.shares)} aksjer
         </strong>
         <small>
           Inngang {formatPrice(position.entryPrice)} · siste{" "}
@@ -108,6 +128,7 @@ function PositionSummary({
         <small className={unrealized >= 0 ? "tone-positive" : "tone-negative"}>
           Urealisert {formatMoney(unrealized, 2, true)}
         </small>
+        <small>Kjøpsgrunn: {position.reason}</small>
       </div>
     );
   }
@@ -117,7 +138,8 @@ function PositionSummary({
       <div className="sim-position sim-position-pending">
         <span className="sim-position-label">Venter på trigger</span>
         <strong>
-          {pending.ticker} over {formatPrice(pending.trigger)}
+          <SimulatorTickerLink ticker={pending.ticker} /> over{" "}
+          {formatPrice(pending.trigger)}
         </strong>
         <small>
           {formatNumber(pending.shares)} aksjer · stop{" "}
@@ -130,6 +152,7 @@ function PositionSummary({
           Siden {formatDateTime(new Date(pending.createdAt))}
           {equity ? ` · egenkapital ${formatMoney(equity.equity)}` : ""}
         </small>
+        <small>Planlagt kjøpsgrunn: {pending.reason}</small>
       </div>
     );
   }
@@ -182,7 +205,9 @@ function TradeTable({ trades }: { trades: SimulatorTradeRecord[] }) {
                   {trade.side === "buy" ? "Kjøp" : "Salg"}
                 </span>
               </td>
-              <td className="ticker">{trade.ticker}</td>
+              <td className="ticker">
+                <SimulatorTickerLink ticker={trade.ticker} />
+              </td>
               <td className="num">{formatNumber(trade.quantity)}</td>
               <td className="num">{formatPrice(trade.price)}</td>
               <td className="num">{formatMoney(trade.fee, 2)}</td>
@@ -200,7 +225,14 @@ function TradeTable({ trades }: { trades: SimulatorTradeRecord[] }) {
                   : formatMoney(trade.realizedPnl, 2, true)}
               </td>
               <td className="sim-trade-reason" title={trade.reason}>
-                {trade.reason}
+                {trade.side === "buy" ? (
+                  <details className="sim-buy-reason">
+                    <summary>Vis kjøpsbegrunnelse</summary>
+                    <p>{trade.reason}</p>
+                  </details>
+                ) : (
+                  trade.reason
+                )}
               </td>
             </tr>
           ))}

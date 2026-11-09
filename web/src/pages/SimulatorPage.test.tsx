@@ -42,7 +42,7 @@ function makeData(): SimulatorData {
           highestPrice: 102,
           lastPrice: 102,
           maxHoldingDays: 5,
-          reason: "seed",
+          reason: "Swing: TEST – momentum; Uke +5 %, måned +10 %",
         },
         pending: null,
         updatedAt: new Date("2026-11-05T10:00:00+01:00"),
@@ -64,7 +64,7 @@ function makeData(): SimulatorData {
           maxHoldingDays: 3,
           score: 72,
           createdAt: "2026-11-05T09:40:00.000Z",
-          reason: "Etrade: OET",
+          reason: "Etrade: OET – Breakout; Uke +6 %, RSI 61",
         },
         updatedAt: new Date("2026-11-05T10:00:00+01:00"),
       },
@@ -99,7 +99,7 @@ function makeData(): SimulatorData {
         price: 100,
         fee: 29,
         realizedPnl: null,
-        reason: "Etrade: OET – Breakout (trigger)",
+        reason: "Etrade: OET – Breakout (score 72); Uke +6 %, Dag +2 % (trigger)",
         executedAt: "2026-11-05T09:45:00.000Z",
       },
       {
@@ -111,7 +111,7 @@ function makeData(): SimulatorData {
         price: 100,
         fee: 29,
         realizedPnl: null,
-        reason: "Trend: TREND – 20/50-dagers trend",
+        reason: "Trend: TREND – SMA20 over SMA50; uke +5 %, måned +12 %, kvartal +25 %",
         executedAt: "2026-11-05T09:55:00.000Z",
       },
     ],
@@ -192,16 +192,29 @@ describe("SimulatorPage", () => {
     expect(text).toContain("Venter på trigger");
     expect(text).toContain("OET over");
     expect(text).toContain("Swing: TEST – Momentum");
+    expect(text).toContain("Kjøpsgrunn: Swing: TEST – momentum");
+    expect(
+      container.querySelector('a[href="https://www.nordnet.no/aksjer/kurser/test-xosl"]'),
+    ).toBeTruthy();
 
     expect(screen.getByRole("tab", { name: /Etrade/ })).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: /Etrade/ }));
 
     expect(container.textContent).toContain("Etrade: OET – Breakout");
+    expect(container.textContent).toContain("Planlagt kjøpsgrunn: Etrade: OET");
     expect(container.textContent).not.toContain("Swing: TEST – Momentum");
+    const purchaseReason = screen.getByText("Vis kjøpsbegrunnelse");
+    const disclosure = purchaseReason.closest("details");
+    expect(disclosure?.open).toBe(false);
+    fireEvent.click(purchaseReason);
+    expect(disclosure?.open).toBe(true);
+    expect(disclosure?.textContent).toContain("Uke +6 %, Dag +2 %");
 
     fireEvent.click(screen.getByRole("tab", { name: /Trend/ }));
-    expect(container.textContent).toContain("Trend: TREND – 20/50-dagers trend");
-    expect(container.textContent).not.toContain("Etrade: OET – Breakout");
+    expect(container.textContent).toContain("Trend: TREND – SMA20 over SMA50");
+    expect(
+      screen.getByRole("tabpanel", { name: "Trend" }).textContent,
+    ).not.toContain("Etrade: OET – Breakout");
   });
 
   it("explains the empty state before the first tick", () => {

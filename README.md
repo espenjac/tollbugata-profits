@@ -66,7 +66,8 @@ Oppsett:
   brudd over forrige dags topp; den har ATR-trailing stop og ingen fast
   gevinstgrense. Hver modus eier maks én
   aksje om gangen, betaler 29 kr i kurtasje hver vei og registrerer alle kjøp og
-  salg. Fanen viser utviklingsgraf, nøkkeltall og separate handler per modus.
+  salg med kort kjøpsbegrunnelse. Fanen viser utviklingsgraf, nøkkeltall,
+  Nordnet-lenker og separate handler per modus.
   Dette er fremoverrettet papirhandel, ikke backtesting, og ingen ekte ordrer
   sendes.
 - Når børsen er åpen, cacher Edge Function skannerdata i 30 sekunder. Utenfor

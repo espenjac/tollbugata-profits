@@ -37,6 +37,14 @@ export function nordnetUrl(stock: Stock): string {
 }
 
 export function nordnetUrlForTicker(ticker: string): string | null {
-  const slug = slugMap.get(ticker.toUpperCase());
-  return slug ? NORDNET_BASE + slug : null;
+  const normalized = ticker.trim().toUpperCase();
+  if (!/^[A-Z0-9][A-Z0-9._-]{0,19}$/.test(normalized)) {
+    return null;
+  }
+  const knownSlug = slugMap.get(normalized);
+  const fallbackSlug = normalized
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `${NORDNET_BASE}${knownSlug ?? `${fallbackSlug}-xosl`}`;
 }

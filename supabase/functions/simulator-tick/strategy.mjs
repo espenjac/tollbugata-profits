@@ -2336,7 +2336,7 @@ function buildTrendIdeas(stocks, capital, buyFee) {
 }
 // src/core/simulator.ts
 /**
-* Forward paper trading for the two report modes.
+* Forward paper trading for the Swing, Etrade and Trend modes.
 *
 * The simulator only decides long trades and never talks to a broker. Each
 * mode has its own 5 000 kr portfolio and can hold at most one stock at a time.
@@ -2482,7 +2482,8 @@ function openSwing(context) {
 	const plan = main.trade;
 	if (!plan.feasible || plan.shares <= 0 || price <= 0 || plan.targetPrice <= 0 || plan.stopPrice <= 0) return;
 	const categories = main.candidate.categories.length > 0 ? main.candidate.categories.join(", ") : "hovedkandidat";
-	const reason = `Swing: ${stock.ticker} – ${categories} (score ${main.candidate.score.toFixed(0)})`;
+	const rationale = main.candidate.reasons.slice(0, 3).join(", ");
+	const reason = `Swing: ${stock.ticker} – ${categories} (score ${main.candidate.score.toFixed(0)})` + (rationale ? `; ${rationale}` : "");
 	executeBuy(context, {
 		ticker: stock.ticker,
 		shares: plan.shares,
@@ -2595,7 +2596,8 @@ function openEtrade(context) {
 	const stock = best.candidate.stock;
 	const price = stock.close;
 	if (best.invalidation !== null && price <= best.invalidation) return;
-	const reason = `Etrade: ${stock.ticker} – ${best.setupLabel} (score ${best.score.toFixed(0)})`;
+	const rationale = best.candidate.reasons.slice(0, 3).join(", ");
+	const reason = `Etrade: ${stock.ticker} – ${best.setupLabel} (score ${best.score.toFixed(0)})` + (rationale ? `; ${rationale}` : "");
 	if (price >= best.trigger) {
 		const levels = etradeLevelsForEntry(price, best.stopPct);
 		executeBuy(context, {
@@ -2694,7 +2696,7 @@ function openTrend(context) {
 	const stock = best.stock;
 	const price = stock.close;
 	if (price <= best.invalidation) return;
-	const reason = `Trend: ${stock.ticker} – 20/50-dagers trend (score ${best.score.toFixed(0)})`;
+	const reason = `Trend: ${stock.ticker} – SMA20 over SMA50; uke ${formatPct(stock.weekReturn)}, måned ${formatPct(stock.monthReturn)}, kvartal ${formatPct(stock.quarterReturn)}; brudd over forrige dags topp (score ${best.score.toFixed(0)})`;
 	if (price >= best.trigger) {
 		executeBuy(context, {
 			ticker: stock.ticker,
