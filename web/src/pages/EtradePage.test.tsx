@@ -66,6 +66,7 @@ function makeStock(overrides: Partial<Stock> = {}): Stock {
     dayReturn: 0.01,
     open: 100,
     high: 101,
+    previousDayHigh: null,
     low: 98,
     vwap: 100.5,
     ...overrides,
@@ -117,6 +118,28 @@ describe("EtradePage", () => {
     expect(text).toContain("Plan – observer – utfør:");
     expect(text).toContain("long only");
     expect(text).toContain("Slik brukes Etrade-modus");
+  });
+
+  it("labels an already crossed prior-session trigger as confirmed", () => {
+    mockState.report = makeReport([
+      makeStock({
+        close: 104,
+        high: 104,
+        previousDayHigh: 101,
+        sma5: 100,
+        sma20: 98,
+      }),
+    ]);
+    const { container } = render(
+      <MemoryRouter>
+        <EtradePage />
+      </MemoryRouter>,
+    );
+    const text = container.textContent ?? "";
+
+    expect(text).toContain("Historisk bruddnivå");
+    expect(text).toContain("Brudd allerede bekreftet");
+    expect(text).toContain("Vurder inngang ved gjeldende kurs");
   });
 
   it("shows watchlist ideas with the blocking reason", () => {

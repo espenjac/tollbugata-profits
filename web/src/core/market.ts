@@ -33,6 +33,7 @@ export const SCANNER_COLUMNS = [
   "ATR",
   "open",
   "high",
+  "high[1]",
   "low",
   "VWAP",
 ] as const;
@@ -160,6 +161,7 @@ export function parseScannerPayload(
       atr: numberValue(values.get("ATR")),
       open: numberValue(values.get("open")),
       high: numberValue(values.get("high")),
+      previousDayHigh: numberValue(values.get("high[1]")),
       low: numberValue(values.get("low")),
       vwap: numberValue(values.get("VWAP")),
     });

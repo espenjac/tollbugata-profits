@@ -14,6 +14,7 @@ describe("parseScannerPayload", () => {
     set("currency", "NOK");
     set("open", 101);
     set("high", 102);
+    set("high[1]", 99.5);
     set("low", 99);
     set("VWAP", 100.5);
 
@@ -27,6 +28,7 @@ describe("parseScannerPayload", () => {
       close: 100,
       open: 101,
       high: 102,
+      previousDayHigh: 99.5,
       low: 99,
       vwap: 100.5,
     });

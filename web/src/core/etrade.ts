@@ -23,6 +23,7 @@ export const ETRADE_ATR_STOP_MULTIPLIER = 1;
 export const ETRADE_MIN_STOP_PCT = 0.03;
 export const ETRADE_MAX_STOP_PCT = 0.05;
 export const ETRADE_BREAKOUT_BUFFER = 0.003;
+export const ETRADE_MAX_BREAKOUT_CHASE_PCT = 0.05;
 export const ETRADE_TARGET_MULTIPLES = [2, 3.5, 5] as const;
 export const ETRADE_MAX_IDEAS = 6;
 export const ETRADE_MAX_WATCHLIST = 6;
@@ -141,12 +142,16 @@ function chooseSetup(candidate: Candidate): Setup {
     candidate.newsSignal.count > 0 &&
     candidate.newsSignal.sentiment === "positive" &&
     candidate.newsSignal.eventType !== "capital_raise";
-  const keyHigh =
-    candidate.resistance !== null &&
-    candidate.resistance > close &&
-    candidate.resistance / close - 1 <= 0.05
-      ? candidate.resistance
-      : null;
+  const keyHigh = [candidate.resistance, stock.previousDayHigh]
+    .filter(
+      (level): level is number =>
+        positive(level) &&
+        Math.abs(level / close - 1) <= ETRADE_MAX_BREAKOUT_CHASE_PCT,
+    )
+    .sort(
+      (left, right) =>
+        Math.abs(left / close - 1) - Math.abs(right / close - 1),
+    )[0] ?? null;
 
   if (nearSma20 && !overextended && rsi < 65) {
     return {
@@ -258,6 +263,7 @@ function ideaWarnings(
 
 function ideaBlockReasons(
   candidate: Candidate,
+  setup: EtradeSetup,
   targets: EtradeTarget[],
   rewardRisk: number | null,
   today: string,
@@ -282,6 +288,13 @@ function ideaBlockReasons(
   }
   if ((stock.dayReturn ?? 0) >= 0.08) {
     values.push("stort dagshopp – jag ikke");
+  }
+  if (
+    setup === "breakout" &&
+    positive(stock.previousDayHigh) &&
+    stock.close > stock.previousDayHigh * (1 + ETRADE_MAX_BREAKOUT_CHASE_PCT)
+  ) {
+    values.push("kursen er over 5 % over gårsdagens topp – vent på pullback");
   }
   const earnings = daysUntil(stock.earningsDate, today);
   if (earnings !== null && earnings >= 0 && earnings <= 2) {
@@ -312,7 +325,11 @@ function buildIdea(
   const volumePace = timeWeightedVolumeRatio(candidate.volumeRatio, now);
   const config = settings.trade;
   const setup = chooseSetup(candidate);
-  const entry = setup.trigger * (1 + Math.max(0, config.slippagePct));
+  // A historical breakout level may already be below the live price when an
+  // idea is first discovered. Keep the trigger anchored to that level, while
+  // sizing stops, targets and shares from the price that would actually fill.
+  const entry = Math.max(setup.trigger, stock.close) *
+    (1 + Math.max(0, config.slippagePct));
   const budget = Math.max(0, config.capital - config.buyFee);
   const shares = Math.floor(budget / entry);
   if (shares <= 0) {
@@ -350,6 +367,7 @@ function buildIdea(
       : null;
   const blockReasons = ideaBlockReasons(
     candidate,
+    setup.setup,
     targets,
     rewardRisk,
     today,
@@ -467,8 +485,9 @@ export function buildEtradeReport(
   const marketOpen = marketSession(now) === "open";
   const dataBasis =
     `Etrade-ideer fra siste kurs (${formatDateTime(universe.fetchedAt)}). ` +
-    "Horisont 1–3 handledager. Kjøp først når triggeren brytes med volum; " +
-    "kurs og handelsplan bruker siste handlede kurs.";
+    "Horisont 1–3 handledager. Bruddtrigger bruker nærliggende historisk motstand, " +
+    "inkludert forrige dags topp; hvis nivået allerede er brutt vises det som bekreftet. " +
+    "Kurs og handelsplan bruker siste handlede kurs.";
 
   return {
     generatedAt: now,

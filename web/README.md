@@ -54,7 +54,8 @@ npm run preview    # forhåndsvis produksjonsbygget
   fredagens helgeflagg som minner om gaprisiko. Standard horisont er 2–5
   handledager, og posisjoner kan holdes over helgen.
 - `src/core/etrade.ts` bygger de kortsiktige Etrade-ideene. Hver ide får en
-  breakout/pullback-trigger, stop på 3–5 % (1 × ATR), tre delmål på 2R/3,5R/5R,
+  historisk forankret breakout-/pullback-trigger (forrige dags topp når tilgjengelig),
+  stop på 3–5 % (1 × ATR), tre delmål på 2R/3,5R/5R,
   nettoresultat etter kurtasje og en «ugyldig under»-linje. Volumet måles mot
   forventet andel av dagens volum på rapporttidspunktet (`src/core/volume.ts`),
   så terskelen er like streng kl. 09:30 som kl. 14:00. Kandidater må ha minst

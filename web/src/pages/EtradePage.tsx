@@ -280,7 +280,8 @@ export function EtradeIdeaCard({
     <>
       {title}
       <p className="main-reasons">
-        Kjøp over {formatPrice(idea.trigger)} kr · stopp{" "}
+        {idea.trigger <= stock.close ? "Bruddnivå" : "Kjøp over"}{" "}
+        {formatPrice(idea.trigger)} kr · stopp{" "}
         {formatPrice(idea.stopPrice)} kr · T1 {formatPrice(idea.targets[0]?.price)}
       </p>
       {variant === "watchlist" && idea.blockReasons.length > 0 ? (
@@ -378,11 +379,18 @@ function EtradeIdeaDetails({
 
       <div className="etrade-levels">
         <div className="etrade-level etrade-level-entry">
-          <span>Kjøp over</span>
+          <span>
+            {idea.trigger <= stock.close ? "Historisk bruddnivå" : "Kjøp over"}
+          </span>
           <strong>{formatPrice(idea.trigger)} kr</strong>
           <small>
-            {formatPct(triggerDistance(stock.close, idea.trigger), 1, false)} over
-            siste kurs
+            {idea.trigger <= stock.close
+              ? `Brudd allerede bekreftet · ${formatPct(
+                  Math.abs(triggerDistance(stock.close, idea.trigger)),
+                  1,
+                  false,
+                )} over nivået`
+              : `${formatPct(triggerDistance(stock.close, idea.trigger), 1, false)} over siste kurs`}
             {idea.invalidation !== null
               ? ` · ingen handel under ${formatPrice(idea.invalidation)}`
               : ""}
@@ -424,9 +432,11 @@ function EtradeIdeaDetails({
         {idea.invalidation !== null
           ? `Ingen handel under ${formatPrice(idea.invalidation)} kr. `
           : ""}
-        Kjøp først når kursen bryter over {formatPrice(idea.trigger)} kr med
-        volum. Ta delgevinst ved T1, flytt stopen til inngang etter T1, og selg
-        senest etter {idea.horizonDays} handledager hvis målet ikke er nådd.
+        {idea.trigger <= stock.close
+          ? `Bruddet over historisk nivå er allerede bekreftet. Vurder inngang ved gjeldende kurs bare hvis volum og risiko fortsatt stemmer. `
+          : `Kjøp først når kursen bryter over ${formatPrice(idea.trigger)} kr med volum. `}
+        Ta delgevinst ved T1, flytt stopen til inngang etter T1, og selg senest
+        etter {idea.horizonDays} handledager hvis målet ikke er nådd.
       </div>
 
       <div className="etrade-checks">
@@ -452,6 +462,11 @@ function EtradeIdeaDetails({
           <h3>Nivåer</h3>
           <ul className="report-list">
             <li>Trigger: {formatPrice(idea.trigger)} kr</li>
+            <li>
+              Forrige dags topp: {stock.previousDayHigh !== null
+                ? `${formatPrice(stock.previousDayHigh)} kr`
+                : "ikke tilgjengelig"}
+            </li>
             <li>
               Ingen handel under:{" "}
               {idea.invalidation === null

@@ -30,6 +30,7 @@ function makeStock(overrides: Partial<Stock> = {}): Stock {
     dayReturn: 0.01,
     open: 100,
     high: 101,
+    previousDayHigh: null,
     low: 98,
     vwap: 100.5,
     ...overrides,
@@ -88,6 +89,40 @@ describe("buildEtradeReport", () => {
     expect(idea.checks.every((check) => check.ok)).toBe(true);
     expect(idea.shares).toBeGreaterThan(0);
     expect(idea.horizonDays).toBe(3);
+  });
+
+  it("anchors breakout trigger to the prior session high after it is crossed", () => {
+    const report = makeReport([
+      makeStock({
+        close: 12.45,
+        high: 12.5,
+        previousDayHigh: 11.93,
+        sma5: 12,
+        sma20: 11.8,
+        sma50: 12,
+        atr: 0.48,
+      }),
+    ]);
+    const idea = report.ideas[0];
+
+    expect(idea.setup).toBe("breakout");
+    expect(idea.trigger).toBeCloseTo(11.93 * 1.003);
+    expect(idea.trigger).toBeLessThan(idea.candidate.stock.close);
+    expect(idea.entry).toBeCloseTo(idea.candidate.stock.close);
+    expect(idea.stopPrice).toBeLessThan(idea.entry);
+    expect(idea.targets[0].price).toBeGreaterThan(idea.entry);
+  });
+
+  it("blocks a prior-day breakout after price has run more than 5%", () => {
+    const report = makeReport([
+      makeStock({ close: 106, high: 106, previousDayHigh: 100 }),
+    ]);
+
+    expect(report.ideas).toHaveLength(0);
+    expect(report.watchlist).toHaveLength(1);
+    expect(report.watchlist[0].blockReasons.join(" ")).toContain(
+      "over 5 % over gårsdagens topp",
+    );
   });
 
   it("clamps the stop to 3-5 % and falls back to 4 % without ATR", () => {

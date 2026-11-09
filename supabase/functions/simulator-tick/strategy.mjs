@@ -1824,7 +1824,7 @@ function chooseSetup(candidate) {
 	const overextended = rsi >= 72 || week >= .18;
 	const nearSma20 = sma20 !== null && close >= sma20 && close / sma20 - 1 <= .02;
 	const positiveNews = candidate.newsSignal.count > 0 && candidate.newsSignal.sentiment === "positive" && candidate.newsSignal.eventType !== "capital_raise";
-	const keyHigh = candidate.resistance !== null && candidate.resistance > close && candidate.resistance / close - 1 <= .05 ? candidate.resistance : null;
+	const keyHigh = [candidate.resistance, stock.previousDayHigh].filter((level) => positive(level) && Math.abs(level / close - 1) <= .05).sort((left, right) => Math.abs(left / close - 1) - Math.abs(right / close - 1))[0] ?? null;
 	if (nearSma20 && !overextended && rsi < 65) return {
 		setup: "pullback",
 		trigger: close * 1.003,
@@ -1877,7 +1877,7 @@ function ideaWarnings(candidate, atrKnown, today, volumePace) {
 	if (stock.close < 10) values.push("Lav aksjekurs – større prosentvise utslag og spreadrisiko.");
 	return values;
 }
-function ideaBlockReasons(candidate, targets, rewardRisk, today, volumePace) {
+function ideaBlockReasons(candidate, setup, targets, rewardRisk, today, volumePace) {
 	const stock = candidate.stock;
 	const values = [];
 	if (targets.length === 0 || targets[0].net <= 0) values.push("første mål dekker ikke kurtasjen");
@@ -1886,6 +1886,7 @@ function ideaBlockReasons(candidate, targets, rewardRisk, today, volumePace) {
 	if (stock.rsi !== null && stock.rsi >= 75) values.push("RSI over 75 – overopphetet");
 	if ((stock.weekReturn ?? 0) >= .2) values.push("uken er svært strukket");
 	if ((stock.dayReturn ?? 0) >= .08) values.push("stort dagshopp – jag ikke");
+	if (setup === "breakout" && positive(stock.previousDayHigh) && stock.close > stock.previousDayHigh * 1.05) values.push("kursen er over 5 % over gårsdagens topp – vent på pullback");
 	const earnings = daysUntil(stock.earningsDate, today);
 	if (earnings !== null && earnings >= 0 && earnings <= 2) values.push("resultat innen 2 dager");
 	if (candidate.newsSignal.eventType === "capital_raise") values.push("emisjon/kapitalinnhenting");
@@ -1898,7 +1899,7 @@ function buildIdea(candidate, settings, today, now) {
 	const volumePace = timeWeightedVolumeRatio(candidate.volumeRatio, now);
 	const config = settings.trade;
 	const setup = chooseSetup(candidate);
-	const entry = setup.trigger * (1 + Math.max(0, config.slippagePct));
+	const entry = Math.max(setup.trigger, stock.close) * (1 + Math.max(0, config.slippagePct));
 	const budget = Math.max(0, config.capital - config.buyFee);
 	const shares = Math.floor(budget / entry);
 	if (shares <= 0) return null;
@@ -1922,7 +1923,7 @@ function buildIdea(candidate, settings, today, now) {
 	});
 	const stopNet = netTradeResult(shares, entry, stopPrice, config);
 	const rewardRisk = stopNet < 0 && targets[0] !== void 0 && targets[0].net > 0 ? targets[0].net / Math.abs(stopNet) : null;
-	const blockReasons = ideaBlockReasons(candidate, targets, rewardRisk, today, volumePace);
+	const blockReasons = ideaBlockReasons(candidate, setup.setup, targets, rewardRisk, today, volumePace);
 	const checks = [
 		{
 			label: "Volum over forventet",
@@ -1994,7 +1995,7 @@ function buildEtradeReport(stocks, universe, news, settings, today, now = /* @__
 		if (helg !== null) warnings.push(helg);
 	}
 	const marketOpen = marketSession(now) === "open";
-	const dataBasis = `Etrade-ideer fra siste kurs (${formatDateTime(universe.fetchedAt)}). Horisont 1–3 handledager. Kjøp først når triggeren brytes med volum; kurs og handelsplan bruker siste handlede kurs.`;
+	const dataBasis = `Etrade-ideer fra siste kurs (${formatDateTime(universe.fetchedAt)}). Horisont 1–3 handledager. Bruddtrigger bruker nærliggende historisk motstand, inkludert forrige dags topp; hvis nivået allerede er brutt vises det som bekreftet. Kurs og handelsplan bruker siste handlede kurs.`;
 	return {
 		generatedAt: now,
 		universeFetchedAt: universe.fetchedAt,
@@ -2618,6 +2619,7 @@ var SCANNER_COLUMNS = [
 	"ATR",
 	"open",
 	"high",
+	"high[1]",
 	"low",
 	"VWAP"
 ];
@@ -2700,6 +2702,7 @@ function parseScannerPayload(payload, growthTickers = []) {
 			atr: numberValue(values.get("ATR")),
 			open: numberValue(values.get("open")),
 			high: numberValue(values.get("high")),
+			previousDayHigh: numberValue(values.get("high[1]")),
 			low: numberValue(values.get("low")),
 			vwap: numberValue(values.get("VWAP"))
 		});

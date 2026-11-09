@@ -43,6 +43,7 @@ function makeStock(overrides: Partial<Stock> = {}): Stock {
     dayReturn: 0.01,
     open: 100,
     high: 101,
+    previousDayHigh: null,
     low: 98,
     vwap: 100.5,
     ...overrides,
@@ -273,6 +274,27 @@ describe("runSimulatorTick", () => {
     expect(buy.side).toBe("buy");
     expect(buy.reason).toContain("trigger");
     expect(stateFor(second, "etrade").position?.ticker).toBe("TEST");
+  });
+
+  it("buys when a historical prior-session breakout is already confirmed", () => {
+    const results = run(
+      {},
+      makeSnapshot([
+        makeStock({
+          close: 104,
+          high: 104,
+          previousDayHigh: 101,
+          sma5: 100,
+          sma20: 98,
+        }),
+      ]),
+    );
+    const [buy] = tradesFor(results, "etrade");
+
+    expect(buy.side).toBe("buy");
+    expect(buy.reason).toContain("trigger");
+    expect(stateFor(results, "etrade").pending).toBeNull();
+    expect(stateFor(results, "etrade").position?.entryPrice).toBe(104);
   });
 
   it("drops an Etrade trigger that falls through invalidation", () => {

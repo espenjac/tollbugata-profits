@@ -57,6 +57,7 @@ const SCAN_COLUMNS = [
   "ATR",
   "open",
   "high",
+  "high[1]",
   "low",
   "VWAP",
 ];
@@ -658,7 +659,9 @@ serve(async (request) => {
 
     const scanTtl = scanTtlSeconds(new Date());
     const [scan, growth, news, benchmark] = await Promise.all([
-      getScan("scan", scanTtl),
+      // Version the cache key when the scanner column order changes so cached
+      // rows from the previous schema cannot be parsed with shifted indexes.
+      getScan("scan-v2", scanTtl),
       getGrowth(),
       getNews(),
       getBenchmark(scanTtl),

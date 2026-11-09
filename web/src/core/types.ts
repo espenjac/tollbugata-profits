@@ -33,6 +33,8 @@ export interface Stock {
   open: number | null;
   /** Today's high from the live scanner, when available. */
   high: number | null;
+  /** Previous completed session's high, when supplied by the scanner. */
+  previousDayHigh: number | null;
   /** Today's low from the live scanner, when available. */
   low: number | null;
   /** Current session VWAP from the live scanner, when available. */
