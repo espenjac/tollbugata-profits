@@ -17,7 +17,7 @@ const REFRESH_MS = 60_000;
 
 /**
  * Reads the shared paper-trading portfolios. The scheduled tick only writes
- * every ten minutes, so a one-minute refresh is enough to keep the view
+ * every five minutes, so a one-minute refresh is enough to keep the view
  * current without hammering the database.
  */
 export function useSimulator(): SimulatorState {

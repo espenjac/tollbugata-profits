@@ -167,7 +167,7 @@ sender aldri ordrer til en megler.
    limit 10;
    ```
 
-Jobben kjører `5,15,25,35,45,55 6-16 * * 1-5` UTC, men kaller bare Edge
+Jobben kjører `5,10,15,20,25,30,35,40,45,50,55 6-16 * * 1-5` UTC, men kaller bare Edge
 Function når `public.oslo_market_open_day(...)` sier at datoen er en handledag
 og Oslo-klokken er mellom 09:05 og 16:30. Det gir åpningsauksjonen fem minutter
 før første kjøring og holder jobben borte på lørdag, søndag og norske

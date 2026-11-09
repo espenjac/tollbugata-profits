@@ -62,7 +62,7 @@ Oppsett:
   long only; short-ideer er bevisst ikke en del av appen.
 - **Simulator** på `/simulator` viser to papirporteføljer, Swing og Etrade, som
   begge starter med 5 000 kr. En planlagt Edge Function sjekker markedet hvert
-  tiende minutt, kjøper den beste anbefalingen i hver modus og selger etter
+  femte minutt, kjøper den beste anbefalingen i hver modus og selger etter
   stop, mål, trailing stop, delmål eller tidsstopp. Hver modus eier maks én
   aksje om gangen, betaler 29 kr i kurtasje hver vei og registrerer alle kjøp og
   salg. Fanen viser utviklingsgraf, nøkkeltall og separate handler per modus.

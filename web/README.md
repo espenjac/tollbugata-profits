@@ -85,7 +85,7 @@ npm run preview    # forhåndsvis produksjonsbygget
   en graf fra `sim_equity_daily` med OSEBX-indeksen normalisert til samme
   startverdi, og separate kjøp/salg-tabs per modus.
   `src/lib/useSimulator.ts` oppdaterer visningen hvert minutt; selve
-  papirhandelen kjøres av `pg_cron` hvert tiende minutt på handledager fra
+  papirhandelen kjøres av `pg_cron` hvert femte minutt på handledager fra
   09:05, og kalenderfunksjonen `oslo_market_open_day` holder jobben borte på
   helger og norske helligdager.
 - Rapporthistorikk inneholder siste lagrede versjon per dato. Rapporten

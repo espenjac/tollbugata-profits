@@ -17,7 +17,7 @@ import type { Stock } from "./types";
  *
  * The simulator only decides long trades and never talks to a broker. Each
  * mode has its own 5 000 kr portfolio and can hold at most one stock at a time.
- * The Edge Function calls this module every ten minutes while Oslo Børs is open,
+ * The Edge Function calls this module every five minutes while Oslo Børs is open,
  * so the same core rules used by the app are applied to the paper portfolio.
  */
 export const SIM_STARTING_CASH = 5_000;
