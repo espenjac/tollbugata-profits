@@ -113,6 +113,27 @@ describe("buildEtradeReport", () => {
     expect(idea.targets[0].price).toBeGreaterThan(idea.entry);
   });
 
+  it("anchors a pullback trigger to SMA20/VWAP instead of the changing quote", () => {
+    const report = makeReport([
+      makeStock({ close: 100, sma20: 99, vwap: 100.5 }),
+    ]);
+    const idea = report.ideas[0];
+
+    expect(idea.setup).toBe("pullback");
+    expect(idea.trigger).toBeCloseTo(100.5 * 1.003);
+  });
+
+  it("reports net realized scale-out proceeds after each sell fee", () => {
+    const idea = makeReport([makeStock()]).ideas[0];
+    const t1Shares = Math.floor(idea.shares / 2);
+    const expectedT1Net =
+      t1Shares * (idea.targets[0].price - idea.entry) -
+      DEFAULT_SETTINGS.trade.buyFee * t1Shares / idea.shares -
+      DEFAULT_SETTINGS.trade.sellFee;
+
+    expect(idea.targets[0].net).toBeCloseTo(expectedT1Net);
+  });
+
   it("blocks a prior-day breakout after price has run more than 5%", () => {
     const report = makeReport([
       makeStock({ close: 106, high: 106, previousDayHigh: 100 }),

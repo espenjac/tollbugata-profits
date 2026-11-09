@@ -276,6 +276,23 @@ describe("runSimulatorTick", () => {
     expect(stateFor(second, "etrade").position?.ticker).toBe("TEST");
   });
 
+  it("rebases stop and targets to a pending order's actual gap fill", () => {
+    const nearHigh = { high52w: 100.4, ath: 100.4, high: 100.2 };
+    const first = run({}, makeSnapshot([makeStock(nearHigh)]));
+    const pending = stateFor(first, "etrade");
+    const second = run(
+      { etrade: pending },
+      makeSnapshot([makeStock({ ...nearHigh, close: 102, high: 103 })]),
+    );
+    const position = stateFor(second, "etrade").position;
+
+    expect(position?.entryPrice).toBe(102);
+    expect(position?.stopPrice).toBeCloseTo(102 * (1 - position!.stopPct));
+    expect(position?.targets[0].price).toBeCloseTo(
+      102 * (1 + position!.stopPct * 2),
+    );
+  });
+
   it("buys when a historical prior-session breakout is already confirmed", () => {
     const results = run(
       {},
@@ -311,7 +328,7 @@ describe("runSimulatorTick", () => {
     expect(stateFor(second, "etrade").position).toBeNull();
   });
 
-  it("takes Etrade profits in three partial exits and protects the entry", () => {
+  it("scales out and keeps a trailing runner after T3", () => {
     const targets: SimTarget[] = [
       { label: "T1", price: 105 },
       { label: "T2", price: 110 },
@@ -349,8 +366,19 @@ describe("runSimulatorTick", () => {
     );
 
     expect(tradesFor(t3, "etrade")[0].reason).toBe("T3");
-    expect(tradesFor(t3, "etrade")[0].quantity).toBe(10);
-    expect(stateFor(t3, "etrade").position).toBeNull();
+    expect(tradesFor(t3, "etrade")[0].quantity).toBe(5);
+    expect(stateFor(t3, "etrade").position?.shares).toBe(5);
+    expect(stateFor(t3, "etrade").position?.stage).toBe(3);
+    expect(stateFor(t3, "etrade").position?.maxHoldingDays).toBe(10);
+    expect(stateFor(t3, "etrade").position?.stopPrice).toBeGreaterThanOrEqual(110);
+
+    const runnerExit = run(
+      { etrade: stateFor(t3, "etrade") },
+      makeSnapshot([passiveStock({ close: 112 })]),
+    );
+    expect(tradesFor(runnerExit, "etrade")[0].reason).toBe("Stop");
+    expect(tradesFor(runnerExit, "etrade")[0].quantity).toBe(5);
+    expect(stateFor(runnerExit, "etrade").position).toBeNull();
   });
 
   it("applies the Etrade time stop after three trading days", () => {

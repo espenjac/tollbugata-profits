@@ -1,5 +1,9 @@
 import type { Settings, TradeConfig } from "./config";
-import { addDaysToDateString, osloDateString, weekdayOfDateString } from "./dates";
+import {
+  addDaysToDateString,
+  isOsloMarketOpenDay,
+  osloDateString,
+} from "./dates";
 import { tradeLevels } from "./swing";
 
 const TICKER_RE = /^[A-Z0-9][A-Z0-9._-]{0,19}$/;
@@ -84,7 +88,7 @@ export function holdingPlan(
 
 /**
  * Trading days since the position was opened, including the buy day.
- * Weekends are skipped; exchange holidays are not modelled.
+ * Weekends and Oslo Børs holidays are skipped.
  */
 export function tradingDaysHeld(
   openedAt: string | null,
@@ -105,8 +109,7 @@ export function tradingDaysHeld(
   let date = start;
   let days = 0;
   for (let guard = 0; date <= end && guard < 1_000; guard += 1) {
-    const weekday = weekdayOfDateString(date);
-    if (weekday !== 0 && weekday !== 6) {
+    if (isOsloMarketOpenDay(date)) {
       days += 1;
     }
     date = addDaysToDateString(date, 1);

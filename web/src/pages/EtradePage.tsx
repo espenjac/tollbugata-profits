@@ -9,7 +9,11 @@ import {
   formatPrice,
 } from "../core/format";
 import { osloDateString } from "../core/dates";
-import type { EtradeIdea, EtradeReport } from "../core/etrade";
+import {
+  ETRADE_RUNNER_MAX_HOLDING_DAYS,
+  type EtradeIdea,
+  type EtradeReport,
+} from "../core/etrade";
 import { forStock, uniqueNews, type NewsFeed } from "../core/news";
 import { nordnetSlug, nordnetUrl } from "../core/nordnet";
 import { marketSession, marketSessionLabel } from "../core/session";
@@ -58,11 +62,12 @@ export function EtradePage() {
       <section className="hero">
         <div className="hero-copy">
           <p className="eyebrow">
-            Oslo Børs · {marketSessionLabel(session)} · Etrade 1–3 dager
+            Oslo Børs · {marketSessionLabel(session)} · Etrade 1–3 dager + runner
           </p>
           <h1>Etrade-modus</h1>
           <p>
-            Kortsiktige long-ideer med tydelig trigger, stopp og tre delmål.
+            Kortsiktige long-ideer med tydelig trigger, stopp, tre delmål og en
+            løperandel som kan følge en sterk trend videre.
             Ideene bygges på nytt fra ferskeste kurs hver gang du åpner eller
             oppdaterer. Kjøp først når triggeren brytes med volum.
           </p>
@@ -272,7 +277,9 @@ export function EtradeIdeaCard({
       </a>
       <span className="pick-name">{stock.name}</span>
       <span className="badge">{idea.setupLabel}</span>
-      <span className="badge growth">{idea.horizonDays} dager</span>
+      <span className="badge growth">
+        {idea.horizonDays} dager + runner ≤{ETRADE_RUNNER_MAX_HOLDING_DAYS}
+      </span>
     </div>
   );
 
@@ -280,7 +287,9 @@ export function EtradeIdeaCard({
     <>
       {title}
       <p className="main-reasons">
-        {idea.trigger <= stock.close ? "Bruddnivå" : "Kjøp over"}{" "}
+        {idea.trigger <= stock.close
+          ? idea.setup === "pullback" ? "Retestnivå" : "Bruddnivå"
+          : "Kjøp over"}{" "}
         {formatPrice(idea.trigger)} kr · stopp{" "}
         {formatPrice(idea.stopPrice)} kr · T1 {formatPrice(idea.targets[0]?.price)}
       </p>
@@ -385,7 +394,7 @@ function EtradeIdeaDetails({
           <strong>{formatPrice(idea.trigger)} kr</strong>
           <small>
             {idea.trigger <= stock.close
-              ? `Brudd allerede bekreftet · ${formatPct(
+              ? `${idea.setup === "pullback" ? "Retest" : "Brudd"} allerede bekreftet · ${formatPct(
                   Math.abs(triggerDistance(stock.close, idea.trigger)),
                   1,
                   false,
@@ -409,7 +418,7 @@ function EtradeIdeaDetails({
             <span>{target.label}</span>
             <strong>{formatPrice(target.price)} kr</strong>
             <small>
-              {formatPct(target.pct)} · netto{" "}
+              {formatPct(target.pct)} · netto realisert til nivået{" "}
               <span className={target.net >= 0 ? "positive" : "negative"}>
                 {formatMoney(target.net, 0, true)}
               </span>
@@ -433,10 +442,10 @@ function EtradeIdeaDetails({
           ? `Ingen handel under ${formatPrice(idea.invalidation)} kr. `
           : ""}
         {idea.trigger <= stock.close
-          ? `Bruddet over historisk nivå er allerede bekreftet. Vurder inngang ved gjeldende kurs bare hvis volum og risiko fortsatt stemmer. `
+          ? `${idea.setup === "pullback" ? "Retesten over SMA20/VWAP" : "Bruddet over historisk nivå"} er allerede bekreftet. Vurder inngang ved gjeldende kurs bare hvis volum og risiko fortsatt stemmer. `
           : `Kjøp først når kursen bryter over ${formatPrice(idea.trigger)} kr med volum. `}
-        Ta delgevinst ved T1, flytt stopen til inngang etter T1, og selg senest
-        etter {idea.horizonDays} handledager hvis målet ikke er nådd.
+        Ta delgevinst ved T1 og T2. Ved T3 selges deler av resten; en mindre
+        runner følger ATR-trailing stop i opptil {ETRADE_RUNNER_MAX_HOLDING_DAYS} handledager.
       </div>
 
       <div className="etrade-checks">

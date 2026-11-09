@@ -1,5 +1,10 @@
 import { settingsForCapital, type Settings } from "./config";
-import { buildEtradeReport } from "./etrade";
+import {
+  buildEtradeReport,
+  ETRADE_RUNNER_MAX_HOLDING_DAYS,
+  etradeExitQuantities,
+  etradeLevelsForEntry,
+} from "./etrade";
 import { tradingDaysHeld } from "./journal";
 import { buildMarketReport } from "./report";
 import { DEFAULT_CRITERIA, screen } from "./screen";
@@ -370,6 +375,13 @@ function manageEtrade(context: TickContext): void {
   const stock = stockFor(context.snapshot, position.ticker);
   const price = updatePrice(position, stock);
 
+  if (position.stage >= 3) {
+    position.stopPrice = Math.max(
+      position.stopPrice,
+      money(position.highestPrice * (1 - position.stopPct)),
+    );
+  }
+
   if (price <= position.stopPrice) {
     executeSell(context, {
       quantity: position.shares,
@@ -386,10 +398,11 @@ function manageEtrade(context: TickContext): void {
     if (target === undefined || price < target.price) {
       break;
     }
-    const finalTarget = current.stage === current.targets.length - 1;
-    const quantity = finalTarget
-      ? current.shares
-      : Math.max(1, Math.floor(current.shares / 2));
+    const plannedExit = etradeExitQuantities(current.originalShares)[current.stage];
+    const quantity = Math.min(
+      current.shares,
+      plannedExit ?? current.shares,
+    );
     executeSell(context, {
       quantity,
       price,
@@ -402,6 +415,22 @@ function manageEtrade(context: TickContext): void {
         state.position.stopPrice = Math.max(
           state.position.stopPrice,
           state.position.entryPrice,
+        );
+      } else if (state.position.stage === 2) {
+        const firstTarget = state.position.targets[0];
+        if (firstTarget) {
+          state.position.stopPrice = Math.max(
+            state.position.stopPrice,
+            firstTarget.price,
+          );
+        }
+      } else if (state.position.stage === 3) {
+        const secondTarget = state.position.targets[1];
+        state.position.maxHoldingDays = ETRADE_RUNNER_MAX_HOLDING_DAYS;
+        state.position.stopPrice = Math.max(
+          state.position.stopPrice,
+          secondTarget?.price ?? state.position.entryPrice,
+          state.position.highestPrice * (1 - state.position.stopPct),
         );
       }
     }
@@ -445,16 +474,20 @@ function openEtrade(context: TickContext): void {
       } else {
         const price = stock.close;
         if (price >= pending.trigger) {
+          const levels = etradeLevelsForEntry(price, pending.stopPct);
           executeBuy(context, {
             ticker: pending.ticker,
             shares: pending.shares,
             price,
             fee: settings.trade.buyFee,
             reason: `${pending.reason} (trigger)`,
-            stopPrice: pending.stopPrice,
+            stopPrice: levels.stopPrice,
             stopPct: pending.stopPct,
             targetPrice: pending.targetPrice,
-            targets: pending.targets,
+            targets: levels.targets.map(({ label, price: targetPrice }) => ({
+              label,
+              price: targetPrice,
+            })),
             maxHoldingDays: pending.maxHoldingDays,
           });
           return;
@@ -493,16 +526,17 @@ function openEtrade(context: TickContext): void {
   }
   const reason = `Etrade: ${stock.ticker} – ${best.setupLabel} (score ${best.score.toFixed(0)})`;
   if (price >= best.trigger) {
+    const levels = etradeLevelsForEntry(price, best.stopPct);
     executeBuy(context, {
       ticker: stock.ticker,
       shares: best.shares,
       price,
       fee: settings.trade.buyFee,
       reason: `${reason} (trigger)`,
-      stopPrice: best.stopPrice,
+      stopPrice: levels.stopPrice,
       stopPct: best.stopPct,
       targetPrice: null,
-      targets: best.targets.map((target) => ({
+      targets: levels.targets.map((target) => ({
         label: target.label,
         price: target.price,
       })),

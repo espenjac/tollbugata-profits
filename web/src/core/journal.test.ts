@@ -87,6 +87,15 @@ describe("tradingDaysHeld", () => {
     expect(held).toBe(2);
   });
 
+  it("does not count Oslo Børs holidays as holding days", () => {
+    expect(
+      tradingDaysHeld(
+        "2026-12-23T10:00:00+01:00",
+        new Date("2026-12-28T10:00:00+01:00"),
+      ),
+    ).toBe(2);
+  });
+
   it("returns null when the opening time is unknown", () => {
     expect(tradingDaysHeld(null)).toBeNull();
   });

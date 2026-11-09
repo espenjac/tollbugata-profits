@@ -19,6 +19,7 @@ import { timeWeightedVolumeRatio } from "./volume";
  * and a level that invalidates the breakout.
  */
 export const ETRADE_MAX_HOLDING_DAYS = 3;
+export const ETRADE_RUNNER_MAX_HOLDING_DAYS = 10;
 export const ETRADE_ATR_STOP_MULTIPLIER = 1;
 export const ETRADE_MIN_STOP_PCT = 0.03;
 export const ETRADE_MAX_STOP_PCT = 0.05;
@@ -88,6 +89,40 @@ export interface EtradeReport {
   warnings: string[];
 }
 
+/** Partial exits at T1/T2/T3 and the remaining runner, using whole shares. */
+export function etradeExitQuantities(shares: number): [number, number, number, number] {
+  let remaining = Math.max(0, Math.floor(shares));
+  const exits: number[] = [];
+  for (let stage = 0; stage < 3; stage += 1) {
+    const quantity = remaining === 0
+      ? 0
+      : remaining === 1
+      ? 1
+      : Math.max(1, Math.floor(remaining / 2));
+    exits.push(quantity);
+    remaining -= quantity;
+  }
+  return [exits[0], exits[1], exits[2], remaining];
+}
+
+/** Derive stop/target prices from the actual filled entry, not a stale trigger. */
+export function etradeLevelsForEntry(entry: number, stopPct: number): {
+  stopPrice: number;
+  targets: EtradeTarget[];
+} {
+  const riskPerShare = entry * stopPct;
+  return {
+    stopPrice: entry - riskPerShare,
+    targets: ETRADE_TARGET_MULTIPLES.map((multiple, index) => ({
+      label: `T${index + 1}`,
+      price: entry + riskPerShare * multiple,
+      pct: riskPerShare * multiple / entry,
+      net: 0,
+      netPct: 0,
+    })),
+  };
+}
+
 function clamp(value: number, minimum = 0, maximum = 1): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
@@ -138,6 +173,9 @@ function chooseSetup(candidate: Candidate): Setup {
   const overextended = rsi >= 72 || week >= 0.18;
   const nearSma20 =
     sma20 !== null && close >= sma20 && close / sma20 - 1 <= 0.02;
+  const pullbackLevel = nearSma20
+    ? Math.max(sma20, positive(stock.vwap) ? stock.vwap : sma20)
+    : null;
   const positiveNews =
     candidate.newsSignal.count > 0 &&
     candidate.newsSignal.sentiment === "positive" &&
@@ -153,11 +191,11 @@ function chooseSetup(candidate: Candidate): Setup {
         Math.abs(left / close - 1) - Math.abs(right / close - 1),
     )[0] ?? null;
 
-  if (nearSma20 && !overextended && rsi < 65) {
+  if (pullbackLevel !== null && !overextended && rsi < 65) {
     return {
       setup: "pullback",
-      trigger: close * (1 + ETRADE_BREAKOUT_BUFFER),
-      invalidation: sma20 * 0.995,
+      trigger: pullbackLevel * (1 + ETRADE_BREAKOUT_BUFFER),
+      invalidation: sma20! * 0.995,
     };
   }
   if (positiveNews && !overextended) {
@@ -342,28 +380,33 @@ function buildIdea(
     ETRADE_MIN_STOP_PCT,
     ETRADE_MAX_STOP_PCT,
   );
-  const stopPrice = entry * (1 - stopPct);
-  const riskPerShare = entry - stopPrice;
+  const levels = etradeLevelsForEntry(entry, stopPct);
   const invested = shares * entry;
   const totalCost = invested + config.buyFee;
   const cashLeft = config.capital - totalCost;
-  const targets: EtradeTarget[] = ETRADE_TARGET_MULTIPLES.map(
-    (multiple, index) => {
-      const price = entry + riskPerShare * multiple;
-      const net = netTradeResult(shares, entry, price, config);
-      return {
-        label: `T${index + 1}`,
-        price,
-        pct: entry > 0 ? price / entry - 1 : 0,
-        net,
-        netPct: totalCost > 0 ? net / totalCost : 0,
-      };
-    },
-  );
-  const stopNet = netTradeResult(shares, entry, stopPrice, config);
+  const exitQuantities = etradeExitQuantities(shares);
+  let realizedThroughTarget = 0;
+  const targets = levels.targets.map((target, index) => {
+    const quantity = exitQuantities[index] ?? 0;
+    if (quantity > 0) {
+      realizedThroughTarget +=
+        quantity * (target.price - entry) -
+        (config.buyFee * quantity) / shares -
+        config.sellFee;
+    }
+    return {
+      ...target,
+      net: realizedThroughTarget,
+      netPct: totalCost > 0 ? realizedThroughTarget / totalCost : 0,
+    };
+  });
+  const stopNet = netTradeResult(shares, entry, levels.stopPrice, config);
+  const fullExitAtT1Net = targets[0]
+    ? netTradeResult(shares, entry, targets[0].price, config)
+    : null;
   const rewardRisk =
-    stopNet < 0 && targets[0] !== undefined && targets[0].net > 0
-      ? targets[0].net / Math.abs(stopNet)
+    stopNet < 0 && fullExitAtT1Net !== null && fullExitAtT1Net > 0
+      ? fullExitAtT1Net / Math.abs(stopNet)
       : null;
   const blockReasons = ideaBlockReasons(
     candidate,
@@ -405,7 +448,7 @@ function buildIdea(
     setupLabel: ETRADE_SETUP_LABELS[setup.setup],
     trigger: setup.trigger,
     invalidation: setup.invalidation,
-    stopPrice,
+    stopPrice: levels.stopPrice,
     stopPct,
     stopNet,
     shares,
@@ -485,7 +528,8 @@ export function buildEtradeReport(
   const marketOpen = marketSession(now) === "open";
   const dataBasis =
     `Etrade-ideer fra siste kurs (${formatDateTime(universe.fetchedAt)}). ` +
-    "Horisont 1–3 handledager. Bruddtrigger bruker nærliggende historisk motstand, " +
+    "Horisont 1–3 handledager, med runner etter T3 i opptil 10 dager. " +
+    "Bruddtrigger bruker nærliggende historisk motstand, " +
     "inkludert forrige dags topp; hvis nivået allerede er brutt vises det som bekreftet. " +
     "Kurs og handelsplan bruker siste handlede kurs.";
 
