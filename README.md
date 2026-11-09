@@ -60,10 +60,11 @@ Oppsett:
   havner på «På radaren» i stedet for i de klare ideene. Etrade-ideene lagres
   ikke som historikk og bygges på nytt fra ferskeste kurs hver gang. Modusen er
   long only; short-ideer er bevisst ikke en del av appen.
-- **Simulator** på `/simulator` viser to papirporteføljer, Swing og Etrade, som
-  begge starter med 5 000 kr. En planlagt Edge Function sjekker markedet hvert
-  femte minutt, kjøper den beste anbefalingen i hver modus og selger etter
-  stop, mål, trailing stop, delmål eller tidsstopp. Hver modus eier maks én
+- **Simulator** på `/simulator` sammenligner tre papirporteføljer: Swing, Etrade
+  og Trend. Alle starter med 5 000 kr. En planlagt Edge Function sjekker
+  markedet hvert femte minutt. Trend krever en positiv 20/50-dagers trend og
+  brudd over forrige dags topp; den har ATR-trailing stop og ingen fast
+  gevinstgrense. Hver modus eier maks én
   aksje om gangen, betaler 29 kr i kurtasje hver vei og registrerer alle kjøp og
   salg. Fanen viser utviklingsgraf, nøkkeltall og separate handler per modus.
   Dette er fremoverrettet papirhandel, ikke backtesting, og ingen ekte ordrer

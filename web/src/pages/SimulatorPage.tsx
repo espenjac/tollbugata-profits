@@ -20,14 +20,16 @@ import {
 } from "../lib/api";
 import { useSimulator } from "../lib/useSimulator";
 
-const MODES: SimMode[] = ["swing", "etrade"];
+const MODES: SimMode[] = ["swing", "etrade", "trend"];
 const MODE_LABELS: Record<SimMode, string> = {
   swing: "Swing",
   etrade: "Etrade",
+  trend: "Trend",
 };
 const MODE_DESCRIPTIONS: Record<SimMode, string> = {
   swing: "2–5 handledager · stop, mål og trailing",
   etrade: "1–3 handledager · trigger og tre delmål",
+  trend: "Flerukers trend · 2× ATR trail · ingen fast gevinstgrense",
 };
 
 function latestEquity(
@@ -261,9 +263,9 @@ export function SimulatorPage() {
           <p className="eyebrow">Papirhandel · ingen ekte ordrer · 5 000 kr per modus</p>
           <h1>Simulator</h1>
           <p>
-            To separate papirporteføljer følger de samme reglene som appen.
-            Den planlagte jobben sjekker markedet hvert tiende minutt, kjøper
-            den beste anbefalingen og selger etter stop, mål eller tidsstopp.
+            Tre separate papirporteføljer sammenligner Swing, Etrade og en
+            langsommere trendstrategi. Den planlagte jobben sjekker markedet
+            hvert femte minutt og kjøper etter reglene for hver modus.
             Resultatene er kun til sammenligning.
           </p>
           <div className="hero-meta">
@@ -356,7 +358,7 @@ export function SimulatorPage() {
           <div>
             <h2>Utvikling</h2>
             <p>
-              Egenkapital per handledag. Begge modusene startet på{" "}
+              Egenkapital per handledag. Alle tre modusene startet på{" "}
               {formatMoney(startingCash, 0)}. OSEBX er normalisert til samme
               startverdi.
             </p>
@@ -364,6 +366,7 @@ export function SimulatorPage() {
           <div className="sim-chart-legend-inline">
             <span className="sim-legend-dot sim-legend-dot-swing" /> Swing
             <span className="sim-legend-dot sim-legend-dot-etrade" /> Etrade
+            <span className="sim-legend-dot sim-legend-dot-trend" /> Trend
             <span className="sim-legend-dot sim-legend-dot-benchmark" /> OSEBX
           </div>
         </div>
@@ -403,11 +406,13 @@ export function SimulatorPage() {
       <section className="panel sim-about">
         <h2>Slik fungerer sammenligningen</h2>
         <p>
-          Swing følger hovedanbefalingen i den vanlige rapporten, mens Etrade
-          venter på at «kjøp over»-triggeren brytes. Begge modusene har 5 000 kr,
-          betaler 29 kr i kurtasje hver vei og kan bare eie én aksje om gangen.
-          Etrade selger halvparten ved T1, halvparten av resten ved T2 og resten
-          ved T3, og flytter stoppen til inngang etter T1.
+          Swing følger hovedanbefalingen i den vanlige rapporten. Etrade venter
+          på at «kjøp over»-triggeren brytes. Trend krever stigende SMA20/SMA50,
+          positiv måneds- og kvartalstrend og brudd over forrige dags topp; den
+          har ingen fast gevinstgrense og bruker en ATR-basert trailing stop.
+          Alle tre har 5 000 kr, betaler 29 kr i kurtasje hver vei og kan bare
+          eie én aksje om gangen. Etrade skalerer ut ved T1/T2/T3 og beholder en
+          runner etter T3.
         </p>
         <p>
           Dette er fremoverrettet papirhandel, ikke backtesting. Simulatoren

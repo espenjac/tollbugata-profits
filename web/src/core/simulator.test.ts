@@ -7,6 +7,7 @@ import {
   SIM_STARTING_CASH,
   type SimPortfolioState,
   type SimPosition,
+  type SimMode,
   type SimTrade,
   type SimTarget,
 } from "./simulator";
@@ -79,7 +80,7 @@ function makeSnapshot(stocks: Stock[], now: Date = NOW): MarketSnapshot {
 }
 
 function run(
-  states: Partial<Record<"swing" | "etrade", SimPortfolioState>>,
+  states: Partial<Record<SimMode, SimPortfolioState>>,
   snapshot: MarketSnapshot,
   now: Date = NOW,
   settings: Settings = DEFAULT_SETTINGS,
@@ -116,14 +117,14 @@ function seedPosition(
 
 function tradesFor(
   results: ReturnType<typeof run>,
-  mode: "swing" | "etrade",
+  mode: SimMode,
 ): SimTrade[] {
   return results.find((result) => result.mode === mode)?.trades ?? [];
 }
 
 function stateFor(
   results: ReturnType<typeof run>,
-  mode: "swing" | "etrade",
+  mode: SimMode,
 ): SimPortfolioState {
   const result = results.find((item) => item.mode === mode);
   if (result === undefined) {
@@ -159,6 +160,57 @@ describe("runSimulatorTick", () => {
     expect(results.find((item) => item.mode === "swing")?.equity.equity).toBe(
       state.cash + (state.position?.shares ?? 0) * 100,
     );
+  });
+
+  it("waits for a qualified trend breakout and invests the full portfolio", () => {
+    const trendStock = makeStock({ previousDayHigh: 100.2 });
+    const first = run({}, makeSnapshot([trendStock]));
+    const pending = stateFor(first, "trend");
+
+    expect(tradesFor(first, "trend")).toHaveLength(0);
+    expect(pending.pending?.ticker).toBe("TEST");
+    expect(pending.pending?.trigger).toBeCloseTo(100.2 * 1.003);
+
+    const second = run(
+      { trend: pending },
+      makeSnapshot([makeStock({ previousDayHigh: 100.2, close: 101, high: 101 })]),
+    );
+    const [buy] = tradesFor(second, "trend");
+    const position = stateFor(second, "trend").position;
+
+    expect(buy.side).toBe("buy");
+    expect(buy.fee).toBe(29);
+    expect(buy.reason).toContain("Trend: TEST");
+    expect(position?.entryPrice).toBe(101);
+    expect(position?.maxHoldingDays).toBe(60);
+    expect(position?.targets).toEqual([]);
+    expect(stateFor(second, "trend").cash).toBeLessThan(100);
+  });
+
+  it("trails the trend position instead of taking a fixed profit", () => {
+    const raisedStop = run(
+      {
+        trend: seedPosition({
+          ticker: "HOLD",
+          targetPrice: null,
+          targets: [],
+          stopPct: 0.06,
+          stopPrice: 94,
+          maxHoldingDays: 60,
+        }),
+      },
+      makeSnapshot([passiveStock({ close: 120 })]),
+    );
+
+    expect(tradesFor(raisedStop, "trend")).toHaveLength(0);
+    expect(stateFor(raisedStop, "trend").position?.stopPrice).toBeCloseTo(112.8);
+
+    const exited = run(
+      { trend: stateFor(raisedStop, "trend") },
+      makeSnapshot([passiveStock({ close: 112 })]),
+    );
+    expect(tradesFor(exited, "trend")[0].reason).toBe("Trend trailing stop");
+    expect(stateFor(exited, "trend").position).toBeNull();
   });
 
   it("never owns more than one stock per mode", () => {

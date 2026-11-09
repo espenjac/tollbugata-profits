@@ -29,7 +29,7 @@ import {
 } from "./strategy.mjs";
 
 const MAX_SNAPSHOT_AGE_MS = 15 * 60 * 1000;
-const MODES: SimMode[] = ["swing", "etrade"];
+const MODES: SimMode[] = ["swing", "etrade", "trend"];
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -105,15 +105,15 @@ async function loadStates(): Promise<Record<SimMode, SimPortfolioState>> {
   if (error) {
     throw new Error(`Could not load simulator state: ${error.message}`);
   }
-  const states = {
-    swing: emptyPortfolioState(),
-    etrade: emptyPortfolioState(),
-  } as Record<SimMode, SimPortfolioState>;
+  const states = Object.fromEntries(
+    MODES.map((mode) => [mode, emptyPortfolioState()]),
+  ) as Record<SimMode, SimPortfolioState>;
   for (const row of data ?? []) {
-    if (row.mode !== "swing" && row.mode !== "etrade") {
+    const mode = MODES.find((candidate) => candidate === row.mode);
+    if (!mode) {
       continue;
     }
-    states[row.mode] = {
+    states[mode] = {
       cash: Number(row.cash),
       position: row.position ?? null,
       pending: row.pending ?? null,

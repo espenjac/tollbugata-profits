@@ -1930,7 +1930,7 @@ th button.sort-active {
 
 .sim-summary-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
 }
 
@@ -1949,6 +1949,12 @@ th button.sort-active {
 .sim-summary-etrade {
   background:
     linear-gradient(160deg, rgba(90, 167, 255, 0.07), transparent 45%),
+    var(--panel);
+}
+
+.sim-summary-trend {
+  background:
+    linear-gradient(160deg, rgba(189, 138, 255, 0.08), transparent 45%),
     var(--panel);
 }
 
@@ -2121,6 +2127,11 @@ th button.sort-active {
 .sim-legend-etrade .sim-legend-dot,
 .sim-legend-dot-etrade {
   background: var(--blue);
+}
+
+.sim-legend-trend .sim-legend-dot,
+.sim-legend-dot-trend {
+  background: #bd8aff;
 }
 
 .sim-legend-benchmark .sim-legend-dot,

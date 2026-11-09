@@ -44,6 +44,8 @@ som begrenser jobben til faktiske handledager på Oslo Børs.
 åpningsauksjonen er ferdig før simulatoren bruker en kurs.
 `0007_simulator_benchmark.sql` lagrer OSEBX-indeksen sammen med hver
 egenkapitalmåling, slik at grafen kan sammenligne porteføljene med børsen.
+`0009_add_trend_simulator.sql` legger til Trend-porteføljen og oppdaterer den
+idempotente tick-funksjonen til å godta den nye modusen.
 
 ## 3. Google-innlogging
 
@@ -101,10 +103,10 @@ allowlist som `market-snapshot`.
 
 ## 5. Simulator og pg_cron
 
-Simulatoren har to delte papirporteføljer, `swing` og `etrade`. Begge starter
-med 5 000 kr. `simulator-tick` henter ferske markedsdata, bygger de samme
-signalene som appen, og skriver kjøp, salg og egenkapital til Supabase. Den
-sender aldri ordrer til en megler.
+Simulatoren har tre delte papirporteføljer: `swing`, `etrade` og `trend`. Alle
+starter med 5 000 kr. `simulator-tick` henter ferske markedsdata, bygger hvert
+modus sitt signal og skriver kjøp, salg og egenkapital til Supabase. Den sender
+aldri ordrer til en megler.
 
 1. Bygg den delte TypeScript-kjernen til Edge Function:
 
@@ -153,7 +155,9 @@ sender aldri ordrer til en megler.
 
 5. `0004_simulator_cron.sql` oppretter jobben, `0005_market_calendar.sql`
    begrenser den til faktiske handledager, og
-   `0006_simulator_open_delay.sql` flytter første kjøring til 09:05.
+   `0006_simulator_open_delay.sql` flytter første kjøring til 09:05, mens
+   `0008_simulator_five_minute_schedule.sql` øker frekvensen til hvert femte
+   minutt. `0009_add_trend_simulator.sql` legger til Trend-porteføljen.
    Kontroller den:
 
    ```sql

@@ -10,6 +10,11 @@ import { buildMarketReport } from "./report";
 import { DEFAULT_CRITERIA, screen } from "./screen";
 import type { MarketSnapshot } from "./snapshot";
 import { SWING_MAX_HOLDING_DAYS } from "./swing";
+import {
+  buildTrendIdeas,
+  TREND_MAX_HOLDING_DAYS,
+  TREND_PENDING_DAYS,
+} from "./trend";
 import type { Stock } from "./types";
 
 /**
@@ -22,7 +27,7 @@ import type { Stock } from "./types";
  */
 export const SIM_STARTING_CASH = 5_000;
 
-export type SimMode = "swing" | "etrade";
+export type SimMode = "swing" | "etrade" | "trend";
 
 export interface SimTarget {
   label: string;
@@ -569,6 +574,135 @@ function openEtrade(context: TickContext): void {
   };
 }
 
+function manageTrend(context: TickContext): void {
+  const { state, settings } = context;
+  const position = state.position;
+  if (position === null) {
+    return;
+  }
+  const stock = stockFor(context.snapshot, position.ticker);
+  const price = updatePrice(position, stock);
+  position.stopPrice = Math.max(
+    position.stopPrice,
+    money(position.highestPrice * (1 - position.stopPct)),
+  );
+
+  if (price <= position.stopPrice) {
+    executeSell(context, {
+      quantity: position.shares,
+      price,
+      fee: settings.trade.sellFee,
+      reason: "Trend trailing stop",
+    });
+    return;
+  }
+
+  const held = tradingDaysHeld(position.entryAt, context.now) ?? 0;
+  if (held >= position.maxHoldingDays) {
+    executeSell(context, {
+      quantity: position.shares,
+      price,
+      fee: settings.trade.sellFee,
+      reason: "Trend tidsstopp",
+    });
+  }
+}
+
+function openTrend(context: TickContext): void {
+  const { state, settings } = context;
+  if (context.sold || state.position !== null) {
+    return;
+  }
+  const ideas = buildTrendIdeas(
+    context.snapshot.universe.stocks,
+    state.cash,
+    settings.trade.buyFee,
+  );
+  const best = ideas[0] ?? null;
+
+  if (state.pending !== null) {
+    const pending = state.pending;
+    const idea = ideas.find((item) => item.stock.ticker === pending.ticker);
+    const stock = stockFor(context.snapshot, pending.ticker);
+    if (idea === undefined || stock === null) {
+      state.pending = null;
+      context.pendingClosed = true;
+    } else {
+      const price = stock.close;
+      if (price >= pending.trigger) {
+        executeBuy(context, {
+          ticker: pending.ticker,
+          shares: pending.shares,
+          price,
+          fee: settings.trade.buyFee,
+          reason: `${pending.reason} (trigger)`,
+          stopPrice: price * (1 - pending.stopPct),
+          stopPct: pending.stopPct,
+          targetPrice: null,
+          targets: [],
+          maxHoldingDays: TREND_MAX_HOLDING_DAYS,
+        });
+        return;
+      }
+      if (
+        price <= pending.invalidation! ||
+        (tradingDaysHeld(pending.createdAt, context.now) ?? 0) >=
+          TREND_PENDING_DAYS
+      ) {
+        state.pending = null;
+        context.pendingClosed = true;
+      } else {
+        return;
+      }
+    }
+  }
+
+  if (
+    context.pendingClosed ||
+    state.position !== null ||
+    state.pending !== null ||
+    best === null
+  ) {
+    return;
+  }
+  const stock = best.stock;
+  const price = stock.close;
+  if (price <= best.invalidation) {
+    return;
+  }
+  const reason =
+    `Trend: ${stock.ticker} – 20/50-dagers trend (score ${best.score.toFixed(0)})`;
+  if (price >= best.trigger) {
+    executeBuy(context, {
+      ticker: stock.ticker,
+      shares: best.shares,
+      price,
+      fee: settings.trade.buyFee,
+      reason: `${reason} (brudd bekreftet)`,
+      stopPrice: price * (1 - best.stopPct),
+      stopPct: best.stopPct,
+      targetPrice: null,
+      targets: [],
+      maxHoldingDays: TREND_MAX_HOLDING_DAYS,
+    });
+    return;
+  }
+  state.pending = {
+    ticker: stock.ticker,
+    shares: best.shares,
+    trigger: best.trigger,
+    invalidation: best.invalidation,
+    stopPrice: best.stopPrice,
+    stopPct: best.stopPct,
+    targetPrice: null,
+    targets: [],
+    maxHoldingDays: TREND_PENDING_DAYS,
+    score: best.score,
+    createdAt: context.now.toISOString(),
+    reason,
+  };
+}
+
 function tick(
   mode: SimMode,
   state: SimPortfolioState,
@@ -596,9 +730,12 @@ function tick(
   if (mode === "swing") {
     manageSwing(context);
     openSwing(context);
-  } else {
+  } else if (mode === "etrade") {
     manageEtrade(context);
     openEtrade(context);
+  } else {
+    manageTrend(context);
+    openTrend(context);
   }
 
   const positionValue =
@@ -620,14 +757,14 @@ function tick(
 }
 
 /**
- * Runs one simulated tick for both modes. The caller is responsible for only
+ * Runs one simulated tick for all modes. The caller is responsible for only
  * invoking this while the market is open and the snapshot is fresh.
  */
 export function runSimulatorTick(input: SimulatorInput): SimPortfolioResult[] {
   const now = input.now ?? new Date();
   const today = input.today ?? now.toISOString().slice(0, 10);
   const results: SimPortfolioResult[] = [];
-  for (const mode of ["swing", "etrade"] as const) {
+  for (const mode of ["swing", "etrade", "trend"] as const) {
     const state = input.states[mode] ?? emptyPortfolioState();
     results.push(tick(mode, state, input.snapshot, input.settings, now, today));
   }

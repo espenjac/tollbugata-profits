@@ -8,10 +8,12 @@ const PAD = { left: 56, right: 18, top: 20, bottom: 34 };
 const MODE_LABELS: Record<SimMode, string> = {
   swing: "Swing",
   etrade: "Etrade",
+  trend: "Trend",
 };
 const MODE_COLORS: Record<SimMode, string> = {
   swing: "#38d6b0",
   etrade: "#5aa7ff",
+  trend: "#bd8aff",
 };
 const BENCHMARK_COLOR = "#f0b429";
 
@@ -42,7 +44,7 @@ function buildSeries(
   }
 
   const series: Series[] = [];
-  for (const mode of ["swing", "etrade"] as const) {
+  for (const mode of ["swing", "etrade", "trend"] as const) {
     const values = byMode.get(mode);
     if (!values) {
       continue;
@@ -125,7 +127,7 @@ export function SimulatorChart({
         <strong>Ingen simulerte tick ennå.</strong>
         <p>
           Grafen fylles når den planlagte jobben har kjørt mens Oslo Børs er
-          åpen. Begge porteføljene starter på {formatMoney(startingCash, 0)}.
+          åpen. Alle porteføljene starter på {formatMoney(startingCash, 0)}.
         </p>
       </div>
     );
@@ -173,7 +175,7 @@ export function SimulatorChart({
   return (
     <div className="sim-chart">
       <div className="sim-chart-legend">
-        {(["swing", "etrade"] as const).map((mode) => {
+        {(["swing", "etrade", "trend"] as const).map((mode) => {
           const line = series.find((item) => item.mode === mode);
           return (
             <div key={mode} className={`sim-legend sim-legend-${mode}`}>
@@ -214,7 +216,7 @@ export function SimulatorChart({
       <svg
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         role="img"
-        aria-label="Utvikling for swing- og Etrade-simulatorene og OSEBX-indeksen"
+        aria-label="Utvikling for Swing, Etrade og Trend-simulatorene og OSEBX-indeksen"
       >
         {ticks.map((tick) => {
           const y = yFor(tick);

@@ -76,12 +76,14 @@ npm run preview    # forhåndsvis produksjonsbygget
   viser en feilmelding hvis kursen ikke kan hentes, og navigerer først etter at
   kursen er mottatt. `src/core/journalPrefill.ts` bygger og parser URL-en, mens
   `src/core/nordnet.ts` gir Nordnet-slug per ticker.
-- `src/core/simulator.ts` inneholder papirhandel-logikken for Swing og Etrade.
-  Begge modusene har 5 000 kr, eier maks én aksje og betaler 29 kr i kurtasje
-  hver vei. `src/core/edge.ts` eksporterer den delte kjernen til
+- `src/core/simulator.ts` inneholder papirhandel-logikken for Swing, Etrade og
+  Trend. Alle modusene har 5 000 kr, eier maks én aksje og betaler 29 kr i
+  kurtasje hver vei. Trend krever positiv SMA20/SMA50- og måned/kvartalstrend,
+  går inn ved brudd på forrige dags topp og lar gevinster løpe med ATR-trailing
+  stop. `src/core/edge.ts` eksporterer den delte kjernen til
   `simulator-tick`-funksjonen, og `npm run build:edge` lager
   `supabase/functions/simulator-tick/strategy.mjs`.
-- `src/pages/SimulatorPage.tsx` er `/simulator`. Den viser begge porteføljene,
+- `src/pages/SimulatorPage.tsx` er `/simulator`. Den viser alle tre porteføljene,
   en graf fra `sim_equity_daily` med OSEBX-indeksen normalisert til samme
   startverdi, og separate kjøp/salg-tabs per modus.
   `src/lib/useSimulator.ts` oppdaterer visningen hvert minutt; selve

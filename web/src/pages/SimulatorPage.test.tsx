@@ -68,6 +68,14 @@ function makeData(): SimulatorData {
         },
         updatedAt: new Date("2026-11-05T10:00:00+01:00"),
       },
+      {
+        mode: "trend",
+        startingCash: 5_000,
+        cash: 29,
+        position: null,
+        pending: null,
+        updatedAt: new Date("2026-11-05T10:00:00+01:00"),
+      },
     ],
     trades: [
       {
@@ -94,6 +102,18 @@ function makeData(): SimulatorData {
         reason: "Etrade: OET – Breakout (trigger)",
         executedAt: "2026-11-05T09:45:00.000Z",
       },
+      {
+        id: 3,
+        mode: "trend",
+        ticker: "TREND",
+        side: "buy",
+        quantity: 49,
+        price: 100,
+        fee: 29,
+        realizedPnl: null,
+        reason: "Trend: TREND – 20/50-dagers trend",
+        executedAt: "2026-11-05T09:55:00.000Z",
+      },
     ],
     equity: [
       {
@@ -107,6 +127,15 @@ function makeData(): SimulatorData {
       },
       {
         mode: "etrade",
+        day: "2026-11-04",
+        cash: 5_000,
+        positionValue: 0,
+        equity: 5_000,
+        benchmark: 2050,
+        recordedAt: new Date("2026-11-04T15:00:00+01:00"),
+      },
+      {
+        mode: "trend",
         day: "2026-11-04",
         cash: 5_000,
         positionValue: 0,
@@ -132,6 +161,15 @@ function makeData(): SimulatorData {
         benchmark: 2055,
         recordedAt: new Date("2026-11-05T10:00:00+01:00"),
       },
+      {
+        mode: "trend",
+        day: "2026-11-05",
+        cash: 29,
+        positionValue: 4_900,
+        equity: 4_929,
+        benchmark: 2055,
+        recordedAt: new Date("2026-11-05T10:00:00+01:00"),
+      },
     ],
   };
 }
@@ -146,6 +184,7 @@ describe("SimulatorPage", () => {
     expect(text).toContain("Simulator");
     expect(text).toContain("Swing");
     expect(text).toContain("Etrade");
+    expect(text).toContain("Trend");
     expect(text).toContain("Utvikling");
     expect(text).toContain("OSEBX");
     expect(text).toContain("Kjøp og salg");
@@ -159,6 +198,10 @@ describe("SimulatorPage", () => {
 
     expect(container.textContent).toContain("Etrade: OET – Breakout");
     expect(container.textContent).not.toContain("Swing: TEST – Momentum");
+
+    fireEvent.click(screen.getByRole("tab", { name: /Trend/ }));
+    expect(container.textContent).toContain("Trend: TREND – 20/50-dagers trend");
+    expect(container.textContent).not.toContain("Etrade: OET – Breakout");
   });
 
   it("explains the empty state before the first tick", () => {

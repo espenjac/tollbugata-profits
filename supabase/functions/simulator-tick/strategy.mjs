@@ -1231,7 +1231,7 @@ function emptyNewsFeed(fetchedAt, since, warning) {
 }
 // src/core/strategy.ts
 var EPSILON = 1e-9;
-function clamp$2(value, low = 0, high = 1) {
+function clamp$3(value, low = 0, high = 1) {
 	return Math.max(low, Math.min(high, value));
 }
 function weighted(components, weights) {
@@ -1308,7 +1308,7 @@ function consistencyScore(stock, config) {
 	if (day >= config.strongSpikeDayReturn) return 0;
 	if (isDaySpike(stock, config)) {
 		const span = Math.max(config.strongSpikeDayReturn - config.spikeDayReturn, EPSILON);
-		return .15 + .2 * clamp$2(1 - (day - config.spikeDayReturn) / span);
+		return .15 + .2 * clamp$3(1 - (day - config.spikeDayReturn) / span);
 	}
 	if (day <= config.smoothDayReturn) return .75;
 	if (day >= config.spikeDayReturn) return .45;
@@ -1324,7 +1324,7 @@ function spikeRisk(stock, signal, config) {
 	if (day >= config.strongSpikeDayReturn) risk = 1;
 	else if (isDaySpike(stock, config)) {
 		const span = Math.max(config.strongSpikeDayReturn - config.spikeDayReturn, EPSILON);
-		risk = .55 + .4 * clamp$2((day - config.spikeDayReturn) / span);
+		risk = .55 + .4 * clamp$3((day - config.spikeDayReturn) / span);
 	} else if (day >= config.spikeDayReturn) risk = .3;
 	else if (day <= config.smoothDayReturn) risk = share <= config.smoothDayShare ? 0 : .1;
 	else risk = .15;
@@ -1334,7 +1334,7 @@ function spikeRisk(stock, signal, config) {
 	const ratio = volumeRatio(stock);
 	if (isRelevantSignal(signal) && signal.sentiment === "positive" && signal.eventType !== "capital_raise" && ratio !== null && ratio >= 1.5) risk *= .8;
 	else if (isRelevantSignal(signal) && signal.sentiment === "negative") risk = Math.min(1, risk + .15);
-	return clamp$2(risk);
+	return clamp$3(risk);
 }
 function newsOpportunity(signal) {
 	if (signal.count === 0) return .45;
@@ -1390,31 +1390,31 @@ function categories(stock, config, signal, status) {
 function opportunityComponents(stock, context, signal, config) {
 	const week = stock.weekReturn ?? 0;
 	const month = stock.monthReturn;
-	let weekScore = clamp$2(week / .08);
+	let weekScore = clamp$3(week / .08);
 	if (week > config.overextendedWeek) weekScore *= Math.max(.25, 1 - (week - config.overextendedWeek) / .1);
-	const monthScore = month !== null ? clamp$2(month / .2) : .35;
+	const monthScore = month !== null ? clamp$3(month / .2) : .35;
 	const momentum = .7 * weekScore + .3 * monthScore;
 	let trend = 0;
 	if (stock.sma20 !== null && stock.sma20 > 0) {
 		const distance = stock.close / stock.sma20 - 1;
-		trend = clamp$2(distance / .08);
+		trend = clamp$3(distance / .08);
 		if (distance > .12) trend *= Math.max(.3, 1 - (distance - .12) / .15);
 	}
-	if (stock.sma5 !== null && stock.sma20 !== null && stock.sma5 > stock.sma20) trend = clamp$2(trend + .12);
-	if (stock.sma50 !== null && stock.close > stock.sma50) trend = clamp$2(trend + .12);
+	if (stock.sma5 !== null && stock.sma20 !== null && stock.sma5 > stock.sma20) trend = clamp$3(trend + .12);
+	if (stock.sma50 !== null && stock.close > stock.sma50) trend = clamp$3(trend + .12);
 	const quarter = stock.quarterReturn;
 	let quarterScore;
 	if (quarter === null) quarterScore = .4;
-	else quarterScore = clamp$2(.5 + (quarter - (context.medianQuarterReturn ?? 0)) / .2);
-	const weekRelative = clamp$2(.5 + (week - (context.medianWeekReturn ?? 0)) / .1);
+	else quarterScore = clamp$3(.5 + (quarter - (context.medianQuarterReturn ?? 0)) / .2);
+	const weekRelative = clamp$3(.5 + (week - (context.medianWeekReturn ?? 0)) / .1);
 	const relativeStrength = .6 * quarterScore + .4 * weekRelative;
 	const turnover = averageTurnover(stock);
-	const liquidity = turnover !== null && turnover > 0 ? clamp$2(Math.log10(turnover / 1e6) / 2) : .3;
+	const liquidity = turnover !== null && turnover > 0 ? clamp$3(Math.log10(turnover / 1e6) / 2) : .3;
 	const ratio = volumeRatio(stock);
 	let volume;
 	if (ratio === null) volume = .4;
 	else {
-		volume = clamp$2((ratio - .4) / 1.2);
+		volume = clamp$3((ratio - .4) / 1.2);
 		if (ratio > 3) volume *= Math.max(.4, 1 - (ratio - 3) / 5);
 	}
 	const resistanceValue = resistance(stock);
@@ -1422,7 +1422,7 @@ function opportunityComponents(stock, context, signal, config) {
 	if (resistanceValue === null) technicalUpside = .7;
 	else {
 		const upside = resistanceValue / stock.close - 1;
-		technicalUpside = upside < .02 ? .45 : clamp$2(upside / .05);
+		technicalUpside = upside < .02 ? .45 : clamp$3(upside / .05);
 	}
 	const atr = atrPct(stock);
 	let volatility;
@@ -1452,11 +1452,11 @@ function opportunityComponents(stock, context, signal, config) {
 }
 function riskComponents(stock, signal, today, config) {
 	const atr = atrPct(stock);
-	const volatility = atr === null ? .5 : clamp$2((atr - .015) / .055);
-	const overextensionValues = [clamp$2(((stock.weekReturn ?? 0) - .1) / .15)];
-	if (stock.rsi !== null) overextensionValues.push(clamp$2((stock.rsi - 65) / 20));
-	if (stock.sma20 !== null && stock.sma20 > 0) overextensionValues.push(clamp$2((stock.close / stock.sma20 - 1 - .08) / .15));
-	if (stock.monthReturn !== null) overextensionValues.push(clamp$2((stock.monthReturn - .3) / .2));
+	const volatility = atr === null ? .5 : clamp$3((atr - .015) / .055);
+	const overextensionValues = [clamp$3(((stock.weekReturn ?? 0) - .1) / .15)];
+	if (stock.rsi !== null) overextensionValues.push(clamp$3((stock.rsi - 65) / 20));
+	if (stock.sma20 !== null && stock.sma20 > 0) overextensionValues.push(clamp$3((stock.close / stock.sma20 - 1 - .08) / .15));
+	if (stock.monthReturn !== null) overextensionValues.push(clamp$3((stock.monthReturn - .3) / .2));
 	const overextension = Math.max(...overextensionValues);
 	const turnover = averageTurnover(stock);
 	let liquidity;
@@ -1553,7 +1553,7 @@ function buildCandidate(stock, context, signal, today, config) {
 	const riskComponentsValue = riskComponents(stock, signal, today, config);
 	const opportunity = 100 * weighted(opportunityComponentsValue, weightsOf(config.weights));
 	const risk = 100 * weighted(riskComponentsValue, weightsOf(config.riskWeights));
-	const score = clamp$2(opportunity * (1 - config.riskPenalty * risk / 100), 0, 100);
+	const score = clamp$3(opportunity * (1 - config.riskPenalty * risk / 100), 0, 100);
 	const status = breakoutStatus(stock, config, signal);
 	const resistanceValue = resistance(stock);
 	const supportValue = support(stock);
@@ -1593,7 +1593,7 @@ var SWING_MAX_STOP_PCT = .06;
 var SWING_TARGET_STOP_MULTIPLE = 1.8;
 var SWING_MIN_TARGET_PCT = .08;
 var SWING_MAX_TARGET_PCT = .1;
-function clamp$1(value, minimum, maximum) {
+function clamp$2(value, minimum, maximum) {
 	return Math.min(maximum, Math.max(minimum, value));
 }
 /**
@@ -1608,11 +1608,11 @@ function tradeLevels(config, atrPctValue = null) {
 		stopPct: config.stopLossPct,
 		maxHoldingDays: 1
 	};
-	const fallbackStop = clamp$1(config.stopLossPct, SWING_MIN_STOP_PCT, SWING_MAX_STOP_PCT);
-	const stopPct = clamp$1(atrPctValue !== null && Number.isFinite(atrPctValue) && atrPctValue > 0 ? atrPctValue * SWING_ATR_STOP_MULTIPLIER : fallbackStop, SWING_MIN_STOP_PCT, SWING_MAX_STOP_PCT);
+	const fallbackStop = clamp$2(config.stopLossPct, SWING_MIN_STOP_PCT, SWING_MAX_STOP_PCT);
+	const stopPct = clamp$2(atrPctValue !== null && Number.isFinite(atrPctValue) && atrPctValue > 0 ? atrPctValue * SWING_ATR_STOP_MULTIPLIER : fallbackStop, SWING_MIN_STOP_PCT, SWING_MAX_STOP_PCT);
 	return {
 		mode: "swing",
-		targetPct: clamp$1(stopPct * SWING_TARGET_STOP_MULTIPLE, SWING_MIN_TARGET_PCT, SWING_MAX_TARGET_PCT),
+		targetPct: clamp$2(stopPct * SWING_TARGET_STOP_MULTIPLE, SWING_MIN_TARGET_PCT, SWING_MAX_TARGET_PCT),
 		stopPct,
 		maxHoldingDays: 5
 	};
@@ -1821,7 +1821,7 @@ function etradeLevelsForEntry(entry, stopPct) {
 		}))
 	};
 }
-function clamp(value, minimum = 0, maximum = 1) {
+function clamp$1(value, minimum = 0, maximum = 1) {
 	return Math.min(maximum, Math.max(minimum, value));
 }
 function positive(value) {
@@ -1883,8 +1883,8 @@ function chooseSetup(candidate) {
 }
 function scoreIdea(candidate, setup, trigger, volumePace) {
 	const stock = candidate.stock;
-	const proximity = stock.close > 0 ? clamp(1 - Math.abs(trigger / stock.close - 1) / .06) : 0;
-	const volume = volumePace === null ? .35 : clamp((volumePace - .5) / 1.5);
+	const proximity = stock.close > 0 ? clamp$1(1 - Math.abs(trigger / stock.close - 1) / .06) : 0;
+	const volume = volumePace === null ? .35 : clamp$1((volumePace - .5) / 1.5);
 	const setupBonus = {
 		breakout: 8,
 		news: 6,
@@ -1893,7 +1893,7 @@ function scoreIdea(candidate, setup, trigger, volumePace) {
 	};
 	const overextended = (stock.rsi ?? 50) >= 72 || (stock.weekReturn ?? 0) >= .18;
 	const newsBonus = candidate.newsSignal.count > 0 && candidate.newsSignal.sentiment === "positive" ? 4 : 0;
-	return clamp(candidate.score * .6 + candidate.opportunityScore * .4 + setupBonus[setup] + 10 * volume + 5 * proximity + newsBonus - (overextended ? 10 : 0), 0, 100);
+	return clamp$1(candidate.score * .6 + candidate.opportunityScore * .4 + setupBonus[setup] + 10 * volume + 5 * proximity + newsBonus - (overextended ? 10 : 0), 0, 100);
 }
 function ideaWarnings(candidate, atrKnown, today, volumePace) {
 	const stock = candidate.stock;
@@ -1934,7 +1934,7 @@ function buildIdea(candidate, settings, today, now) {
 	const shares = Math.floor(budget / entry);
 	if (shares <= 0) return null;
 	const atr = atrPct(stock);
-	const stopPct = clamp((atr ?? .04) * 1, ETRADE_MIN_STOP_PCT, ETRADE_MAX_STOP_PCT);
+	const stopPct = clamp$1((atr ?? .04) * 1, ETRADE_MIN_STOP_PCT, ETRADE_MAX_STOP_PCT);
 	const levels = etradeLevelsForEntry(entry, stopPct);
 	const invested = shares * entry;
 	const totalCost = invested + config.buyFee;
@@ -2286,13 +2286,61 @@ function screen(stocks, criteria) {
 		atHighCount
 	};
 }
+// src/core/trend.ts
+var TREND_MAX_ENTRY_DISTANCE = .05;
+var TREND_MIN_STOP_PCT = .05;
+var TREND_MAX_STOP_PCT = .1;
+var TREND_MIN_AVERAGE_TURNOVER = 3e6;
+function clamp(value, min = 0, max = 1) {
+	return Math.max(min, Math.min(max, value));
+}
+function eligible(stock) {
+	const turnover = averageTurnover(stock);
+	const atr = atrPct(stock);
+	if (stock.market !== "oslo" || !["stock", "dr"].includes(stock.instrumentType) || stock.close < 5 || stock.previousDayHigh === null || stock.previousDayHigh <= 0 || stock.sma20 === null || stock.sma50 === null || stock.monthReturn === null || stock.quarterReturn === null || stock.weekReturn === null || stock.rsi === null || turnover === null || turnover < TREND_MIN_AVERAGE_TURNOVER || atr === null || stock.close <= stock.sma20 || stock.sma20 <= stock.sma50 || stock.monthReturn <= 0 || stock.quarterReturn <= 0 || stock.weekReturn <= 0 || stock.weekReturn > .2 || stock.rsi < 45 || stock.rsi >= 75 || stock.close / stock.sma20 - 1 > .1) return false;
+	const trigger = stock.previousDayHigh * 1.003;
+	return Math.abs(trigger / stock.close - 1) <= TREND_MAX_ENTRY_DISTANCE;
+}
+function score(stock) {
+	const month = stock.monthReturn ?? 0;
+	const quarter = stock.quarterReturn ?? 0;
+	const week = stock.weekReturn ?? 0;
+	const sma20 = stock.sma20 ?? stock.close;
+	const sma50 = stock.sma50 ?? stock.close;
+	const extension = stock.close / sma20 - 1;
+	const trendStack = sma20 / sma50 - 1;
+	return 30 * clamp(month / .25) + 30 * clamp(quarter / .5) + 20 * clamp(week / .15) + 15 * clamp(trendStack / .12) + 5 * (1 - clamp(extension / .1));
+}
+function buildTrendIdeas(stocks, capital, buyFee) {
+	const ideas = [];
+	for (const stock of stocks) {
+		if (!eligible(stock)) continue;
+		const trigger = stock.previousDayHigh * 1.003;
+		const entry = Math.max(stock.close, trigger);
+		const stopPct = clamp(atrPct(stock) * 2, TREND_MIN_STOP_PCT, TREND_MAX_STOP_PCT);
+		const shares = Math.floor(Math.max(0, capital - buyFee) / entry);
+		const invalidation = stock.sma20 * .99;
+		if (shares <= 0 || invalidation >= stock.close) continue;
+		ideas.push({
+			stock,
+			trigger,
+			invalidation,
+			entry,
+			stopPct,
+			stopPrice: entry * (1 - stopPct),
+			shares,
+			score: score(stock)
+		});
+	}
+	return ideas.sort((left, right) => right.score - left.score || left.stock.ticker.localeCompare(right.stock.ticker));
+}
 // src/core/simulator.ts
 /**
 * Forward paper trading for the two report modes.
 *
 * The simulator only decides long trades and never talks to a broker. Each
 * mode has its own 5 000 kr portfolio and can hold at most one stock at a time.
-* The Edge Function calls this module every ten minutes while Oslo Børs is open,
+* The Edge Function calls this module every five minutes while Oslo Børs is open,
 * so the same core rules used by the app are applied to the paper portfolio.
 */
 var SIM_STARTING_CASH = 5e3;
@@ -2585,6 +2633,98 @@ function openEtrade(context) {
 		reason
 	};
 }
+function manageTrend(context) {
+	const { state, settings } = context;
+	const position = state.position;
+	if (position === null) return;
+	const price = updatePrice(position, stockFor(context.snapshot, position.ticker));
+	position.stopPrice = Math.max(position.stopPrice, money(position.highestPrice * (1 - position.stopPct)));
+	if (price <= position.stopPrice) {
+		executeSell(context, {
+			quantity: position.shares,
+			price,
+			fee: settings.trade.sellFee,
+			reason: "Trend trailing stop"
+		});
+		return;
+	}
+	if ((tradingDaysHeld(position.entryAt, context.now) ?? 0) >= position.maxHoldingDays) executeSell(context, {
+		quantity: position.shares,
+		price,
+		fee: settings.trade.sellFee,
+		reason: "Trend tidsstopp"
+	});
+}
+function openTrend(context) {
+	const { state, settings } = context;
+	if (context.sold || state.position !== null) return;
+	const ideas = buildTrendIdeas(context.snapshot.universe.stocks, state.cash, settings.trade.buyFee);
+	const best = ideas[0] ?? null;
+	if (state.pending !== null) {
+		const pending = state.pending;
+		const idea = ideas.find((item) => item.stock.ticker === pending.ticker);
+		const stock = stockFor(context.snapshot, pending.ticker);
+		if (idea === void 0 || stock === null) {
+			state.pending = null;
+			context.pendingClosed = true;
+		} else {
+			const price = stock.close;
+			if (price >= pending.trigger) {
+				executeBuy(context, {
+					ticker: pending.ticker,
+					shares: pending.shares,
+					price,
+					fee: settings.trade.buyFee,
+					reason: `${pending.reason} (trigger)`,
+					stopPrice: price * (1 - pending.stopPct),
+					stopPct: pending.stopPct,
+					targetPrice: null,
+					targets: [],
+					maxHoldingDays: 60
+				});
+				return;
+			}
+			if (price <= pending.invalidation || (tradingDaysHeld(pending.createdAt, context.now) ?? 0) >= 5) {
+				state.pending = null;
+				context.pendingClosed = true;
+			} else return;
+		}
+	}
+	if (context.pendingClosed || state.position !== null || state.pending !== null || best === null) return;
+	const stock = best.stock;
+	const price = stock.close;
+	if (price <= best.invalidation) return;
+	const reason = `Trend: ${stock.ticker} – 20/50-dagers trend (score ${best.score.toFixed(0)})`;
+	if (price >= best.trigger) {
+		executeBuy(context, {
+			ticker: stock.ticker,
+			shares: best.shares,
+			price,
+			fee: settings.trade.buyFee,
+			reason: `${reason} (brudd bekreftet)`,
+			stopPrice: price * (1 - best.stopPct),
+			stopPct: best.stopPct,
+			targetPrice: null,
+			targets: [],
+			maxHoldingDays: 60
+		});
+		return;
+	}
+	state.pending = {
+		ticker: stock.ticker,
+		shares: best.shares,
+		trigger: best.trigger,
+		invalidation: best.invalidation,
+		stopPrice: best.stopPrice,
+		stopPct: best.stopPct,
+		targetPrice: null,
+		targets: [],
+		maxHoldingDays: 5,
+		score: best.score,
+		createdAt: context.now.toISOString(),
+		reason
+	};
+}
 function tick(mode, state, snapshot, settings, now, today) {
 	const context = {
 		mode,
@@ -2604,9 +2744,12 @@ function tick(mode, state, snapshot, settings, now, today) {
 	if (mode === "swing") {
 		manageSwing(context);
 		openSwing(context);
-	} else {
+	} else if (mode === "etrade") {
 		manageEtrade(context);
 		openEtrade(context);
+	} else {
+		manageTrend(context);
+		openTrend(context);
 	}
 	const positionValue = context.state.position === null ? 0 : money(context.state.position.shares * context.state.position.lastPrice);
 	return {
@@ -2621,14 +2764,18 @@ function tick(mode, state, snapshot, settings, now, today) {
 	};
 }
 /**
-* Runs one simulated tick for both modes. The caller is responsible for only
+* Runs one simulated tick for all modes. The caller is responsible for only
 * invoking this while the market is open and the snapshot is fresh.
 */
 function runSimulatorTick(input) {
 	const now = input.now ?? /* @__PURE__ */ new Date();
 	const today = input.today ?? now.toISOString().slice(0, 10);
 	const results = [];
-	for (const mode of ["swing", "etrade"]) {
+	for (const mode of [
+		"swing",
+		"etrade",
+		"trend"
+	]) {
 		const state = input.states[mode] ?? emptyPortfolioState();
 		results.push(tick(mode, state, input.snapshot, input.settings, now, today));
 	}
