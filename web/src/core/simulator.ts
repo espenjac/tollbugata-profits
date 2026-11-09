@@ -41,6 +41,8 @@ export interface SimPosition {
   targetPrice: number | null;
   targets: SimTarget[];
   stage: number;
+  /** Start date for the extended trailing-stop runner, after T3 is reached. */
+  runnerStartedAt?: string | null;
   highestPrice: number;
   lastPrice: number;
   maxHoldingDays: number;
@@ -426,7 +428,7 @@ function manageEtrade(context: TickContext): void {
         }
       } else if (state.position.stage === 3) {
         const secondTarget = state.position.targets[1];
-        state.position.maxHoldingDays = ETRADE_RUNNER_MAX_HOLDING_DAYS;
+        state.position.runnerStartedAt = context.now.toISOString();
         state.position.stopPrice = Math.max(
           state.position.stopPrice,
           secondTarget?.price ?? state.position.entryPrice,
@@ -439,13 +441,17 @@ function manageEtrade(context: TickContext): void {
   if (state.position === null) {
     return;
   }
-  const held = tradingDaysHeld(state.position.entryAt, context.now) ?? 0;
-  if (held >= state.position.maxHoldingDays) {
+  const holdStart = state.position.runnerStartedAt ?? state.position.entryAt;
+  const holdLimit = state.position.runnerStartedAt
+    ? ETRADE_RUNNER_MAX_HOLDING_DAYS
+    : state.position.maxHoldingDays;
+  const held = tradingDaysHeld(holdStart, context.now) ?? 0;
+  if (held >= holdLimit) {
     executeSell(context, {
       quantity: state.position.shares,
       price,
       fee: settings.trade.sellFee,
-      reason: "Tidsstopp",
+      reason: state.position.runnerStartedAt ? "Runner tidsstopp" : "Tidsstopp",
     });
   }
 }

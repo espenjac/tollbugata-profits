@@ -369,7 +369,9 @@ describe("runSimulatorTick", () => {
     expect(tradesFor(t3, "etrade")[0].quantity).toBe(5);
     expect(stateFor(t3, "etrade").position?.shares).toBe(5);
     expect(stateFor(t3, "etrade").position?.stage).toBe(3);
-    expect(stateFor(t3, "etrade").position?.maxHoldingDays).toBe(10);
+    expect(stateFor(t3, "etrade").position?.runnerStartedAt).toBe(
+      NOW.toISOString(),
+    );
     expect(stateFor(t3, "etrade").position?.stopPrice).toBeGreaterThanOrEqual(110);
 
     const runnerExit = run(

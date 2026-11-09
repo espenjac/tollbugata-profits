@@ -2482,17 +2482,19 @@ function manageEtrade(context) {
 				if (firstTarget) state.position.stopPrice = Math.max(state.position.stopPrice, firstTarget.price);
 			} else if (state.position.stage === 3) {
 				const secondTarget = state.position.targets[1];
-				state.position.maxHoldingDays = 10;
+				state.position.runnerStartedAt = context.now.toISOString();
 				state.position.stopPrice = Math.max(state.position.stopPrice, secondTarget?.price ?? state.position.entryPrice, state.position.highestPrice * (1 - state.position.stopPct));
 			}
 		}
 	}
 	if (state.position === null) return;
-	if ((tradingDaysHeld(state.position.entryAt, context.now) ?? 0) >= state.position.maxHoldingDays) executeSell(context, {
+	const holdStart = state.position.runnerStartedAt ?? state.position.entryAt;
+	const holdLimit = state.position.runnerStartedAt ? 10 : state.position.maxHoldingDays;
+	if ((tradingDaysHeld(holdStart, context.now) ?? 0) >= holdLimit) executeSell(context, {
 		quantity: state.position.shares,
 		price,
 		fee: settings.trade.sellFee,
-		reason: "Tidsstopp"
+		reason: state.position.runnerStartedAt ? "Runner tidsstopp" : "Tidsstopp"
 	});
 }
 function openEtrade(context) {
