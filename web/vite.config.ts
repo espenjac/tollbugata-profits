@@ -53,6 +53,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,png,svg,woff2}"],
+        importScripts: ["push-sw.js"],
         navigateFallback: "/tollbugata-profits/index.html",
         navigateFallbackDenylist: [/^\/tollbugata-profits\/auth/],
         cleanupOutdatedCaches: true,

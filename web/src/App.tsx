@@ -36,7 +36,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/etrade" element={<EtradePage />} />
-          <Route path="/simulator" element={<SimulatorPage />} />
+          <Route path="/simulator" element={<SimulatorPage userId={user.id} />} />
           <Route path="/logg" element={<JournalPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

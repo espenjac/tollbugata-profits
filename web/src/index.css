@@ -439,6 +439,30 @@ code {
   box-shadow: var(--shadow);
 }
 
+.sim-push-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.sim-push-panel > div {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.sim-push-panel p {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+@media (max-width: 560px) {
+  .sim-push-panel {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 .panel-heading {
   display: flex;
   align-items: flex-start;

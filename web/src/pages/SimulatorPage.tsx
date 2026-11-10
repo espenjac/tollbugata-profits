@@ -5,6 +5,7 @@ import {
   InlineNotice,
   LoadingView,
 } from "../components/ui";
+import { SimulatorPushToggle } from "../components/SimulatorPushToggle";
 import {
   formatDateTime,
   formatMoney,
@@ -111,7 +112,7 @@ function PositionSummary({
       <div className="sim-position">
         <span className="sim-position-label">Åpen posisjon</span>
         <strong>
-          <SimulatorTickerLink ticker={position.ticker} /> · {" "}
+          <SimulatorTickerLink ticker={position.ticker} /> ·{" "}
           {formatNumber(position.shares)} aksjer
         </strong>
         <small>
@@ -242,7 +243,7 @@ function TradeTable({ trades }: { trades: SimulatorTradeRecord[] }) {
   );
 }
 
-export function SimulatorPage() {
+export function SimulatorPage({ userId }: { userId?: string } = {}) {
   const { data, loading, refreshing, error, loadedAt, refresh } =
     useSimulator();
   const [tab, setTab] = useState<SimMode>("swing");
@@ -321,6 +322,8 @@ export function SimulatorPage() {
           <small>Kjøres automatisk av pg_cron mens børsen er åpen.</small>
         </div>
       </section>
+
+      {userId ? <SimulatorPushToggle userId={userId} /> : null}
 
       {error ? <InlineNotice kind="error">{error}</InlineNotice> : null}
       {data && data.portfolios.length === 0 ? (

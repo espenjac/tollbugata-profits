@@ -45,7 +45,8 @@ som begrenser jobben til faktiske handledager på Oslo Børs.
 `0007_simulator_benchmark.sql` lagrer OSEBX-indeksen sammen med hver
 egenkapitalmåling, slik at grafen kan sammenligne porteføljene med børsen.
 `0009_add_trend_simulator.sql` legger til Trend-porteføljen og oppdaterer den
-idempotente tick-funksjonen til å godta den nye modusen.
+idempotente tick-funksjonen til å godta den nye modusen. `0010_simulator_push.sql`
+lagrer brukernes egne push-abonnementer med RLS.
 
 ## 3. Google-innlogging
 
@@ -171,6 +172,48 @@ aldri ordrer til en megler.
    limit 10;
    ```
 
+### Pushvarsler på telefon
+
+Simulatoren kan sende Android-varsler selv når nettsiden er lukket. Hvert
+innlogget bruker slår på varslene selv fra `/simulator`; nettleseren må ha
+varslingstillatelse. Pushvarsler krever HTTPS (GitHub Pages bruker HTTPS).
+
+1. Lag et VAPID-nøkkelpar lokalt:
+
+   ```bash
+   npx --yes web-push generate-vapid-keys
+   ```
+
+2. Sett den private nøkkelen og kontaktadressen som Supabase Edge Function
+   secrets. Den offentlige nøkkelen brukes også i frontend-builden:
+
+   ```bash
+   supabase secrets set \
+     VAPID_PUBLIC_KEY=<public-key> \
+     VAPID_PRIVATE_KEY=<private-key> \
+     VAPID_SUBJECT=mailto:<e-postadresse>
+   ```
+
+   Legg `VITE_VAPID_PUBLIC_KEY` med samme offentlige nøkkel til som GitHub
+   Actions repository secret. Den er offentlig, men brukes av workflowen når
+   PWA-en bygges.
+
+3. Kjør migreringene inkludert `0010_simulator_push.sql`, og deploy den
+   oppdaterte funksjonen:
+
+   ```bash
+   supabase db push
+   supabase functions deploy simulator-tick --no-verify-jwt
+   ```
+
+4. Bygg og publiser nettsiden på nytt. Åpne `/simulator` i Chrome på Android,
+   trykk **Slå på varsler** og godta tillatelsen. Det er ikke nødvendig å holde
+   nettsiden åpen. Varslet åpner simulatoren når du trykker på det.
+
+Push sendes etter at en ny tick er lagret, for både kjøp og salg. Varslet har
+en egen Nordnet-knapp for aksjen. Levering er «best effort»: hvis push-tjenesten
+er midlertidig utilgjengelig, påvirker det ikke simuleringen eller papirhandelen.
+
 Jobben kjører `5,10,15,20,25,30,35,40,45,50,55 6-16 * * 1-5` UTC, men kaller bare Edge
 Function når `public.oslo_market_open_day(...)` sier at datoen er en handledag
 og Oslo-klokken er mellom 09:05 og 16:30. Det gir åpningsauksjonen fem minutter
@@ -208,6 +251,7 @@ Legg inn disse repository secrets:
 ```text
 VITE_SUPABASE_URL
 VITE_SUPABASE_ANON_KEY
+VITE_VAPID_PUBLIC_KEY
 ```
 
 Workflowen `.github/workflows/deploy.yml` tester, bygger `web/` og publiserer
