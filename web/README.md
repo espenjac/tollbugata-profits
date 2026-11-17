@@ -65,6 +65,11 @@ npm run preview    # forhåndsvis produksjonsbygget
 - `src/pages/EtradePage.tsx` er `/etrade` med egen fane i hovedmenyen. Siden
   bruker `src/lib/useEtrade.ts`, som alltid henter et ferskt snapshot og aldri
   lagrer ideene som en dagsrapport.
+- `src/pages/TrendlinesPage.tsx` er `/trendlinjer`, en ekstra long-only
+  observasjonsliste for aksjer nær stigende støttelinjer fra de siste 20
+  handelssesjonene. Den krever historiske dagsbunner, minst 1,5 % ATR og
+  3 mill. kr i snittomsetning; ATR og månedlig avkastning vises for å synliggjøre
+  volatilitet. `market-snapshot` må deployes med de utvidede scanner-kolonnene.
 - `src/pages/JournalPage.tsx` er `/logg`. Den henter bare Supabase-data og
   kontakter aldri markeds-API-ene. Åpne posisjoner viser gevinstmål og stop
   regnet fra faktisk snittkost, antall handledager og tidsstopp etter 5 dager.

@@ -7,6 +7,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { EtradePage } from "./pages/EtradePage";
 import { JournalPage } from "./pages/JournalPage";
 import { SimulatorPage } from "./pages/SimulatorPage";
+import { TrendlinesPage } from "./pages/TrendlinesPage";
 
 function routerBasename(): string | undefined {
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -36,6 +37,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/etrade" element={<EtradePage />} />
+          <Route path="/trendlinjer" element={<TrendlinesPage />} />
           <Route path="/simulator" element={<SimulatorPage userId={user.id} />} />
           <Route path="/logg" element={<JournalPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

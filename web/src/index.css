@@ -1226,6 +1226,41 @@ details.candidate-card[open] > summary::after {
   gap: 0.2rem;
 }
 
+.trendline-panel {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.trendline-panel .panel-heading {
+  margin-bottom: 0;
+}
+
+.trendline-table td:first-child {
+  min-width: 12rem;
+}
+
+.trendline-ticker {
+  color: var(--text-strong);
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.trendline-ticker:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.trendline-name {
+  display: block;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.trendline-footnote {
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;

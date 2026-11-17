@@ -39,6 +39,8 @@ export interface Stock {
   low: number | null;
   /** Current session VWAP from the live scanner, when available. */
   vwap: number | null;
+  /** Completed-session lows, oldest first, from the recent scanner history. */
+  recentLows?: Array<number | null>;
 }
 
 export function isGrowth(stock: Stock): boolean {

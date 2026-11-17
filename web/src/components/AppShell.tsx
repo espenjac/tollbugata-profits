@@ -25,6 +25,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             Legacy anbefaling
           </NavLink>
           <NavLink to="/etrade">Etrade</NavLink>
+          <NavLink to="/trendlinjer">Trendlinjer</NavLink>
           <NavLink to="/simulator">Simulator</NavLink>
           <NavLink to="/logg">Handelsdagbok</NavLink>
         </nav>

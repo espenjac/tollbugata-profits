@@ -17,6 +17,8 @@ describe("parseScannerPayload", () => {
     set("high[1]", 99.5);
     set("low", 99);
     set("VWAP", 100.5);
+    set("low[20]", 90);
+    set("low[1]", 98);
 
     const stocks = parseScannerPayload({
       data: [{ s: "OSL:TEST", d: row }],
@@ -32,5 +34,8 @@ describe("parseScannerPayload", () => {
       low: 99,
       vwap: 100.5,
     });
+    expect(stocks[0].recentLows).toHaveLength(20);
+    expect(stocks[0].recentLows?.[0]).toBe(90);
+    expect(stocks[0].recentLows?.[19]).toBe(98);
   });
 });
