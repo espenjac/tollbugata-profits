@@ -17,7 +17,7 @@ const TRENDLINE_GROUPS: Array<{
   {
     phase: "approaching",
     title: "Nærmer seg trendlinjen",
-    explanation: "Kursen ligger over støtten, men innenfor ca. 1,5 ATR.",
+    explanation: "Kursen ligger over støtten, innenfor ca. 2,5 ATR.",
   },
   {
     phase: "bounced",
@@ -110,7 +110,9 @@ export function TrendlinesPage() {
             <p className="muted">
               Aksjer grupperes etter om de nærmer seg, tester eller har sprettet
               fra en stigende støttelinje. Krever minst to stigende svingbunner,
-              dags-ATR på minst 1,5 % og snittomsetning på minst 3 mill. kr.
+              Nå vises også svakere mønstre; disse merkes i listen. Aksjer må
+              fortsatt ha dags-ATR på minst 1,5 % og snittomsetning på minst
+              3 mill. kr.
             </p>
           </div>
         </div>
@@ -171,6 +173,7 @@ function TrendlineGroup({
             <thead>
               <tr>
                 <th>Aksje</th>
+                <th>Oppsett</th>
                 <th className="num">Kurs</th>
                 <th className="num">Trendlinje</th>
                 <th className="num">Avstand</th>
@@ -194,6 +197,7 @@ function TrendlineGroup({
                     </a>
                     <span className="trendline-name">{setup.stock.name}</span>
                   </td>
+                  <td>{setup.quality === "stronger" ? "Sterkere" : "Svakere"}</td>
                   <td className="num">{formatPrice(setup.stock.close)} kr</td>
                   <td className="num">{formatPrice(setup.supportPrice)} kr</td>
                   <td className="num">{formatPercent(setup.distancePct)}</td>

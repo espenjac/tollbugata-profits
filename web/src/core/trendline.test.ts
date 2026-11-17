@@ -84,4 +84,18 @@ describe("findTrendlineSetups", () => {
     expect(atLine[0]?.phase).toBe("on_line");
     expect(bounced[0]?.phase).toBe("bounced");
   });
+
+  it("keeps a weaker short-span trendline as a candidate", () => {
+    const [setup] = findTrendlineSetups([
+      makeStock({
+        recentLows: [
+          93, 94, 95, 94, 92, 94, 95, 96, 95, 93,
+          94, 95, 96, 97, 98, 99, 100, 101, 102, 103,
+        ],
+      }),
+    ]);
+
+    expect(setup.anchorGap).toBeLessThan(8);
+    expect(setup.quality).toBe("weaker");
+  });
 });

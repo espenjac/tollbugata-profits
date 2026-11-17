@@ -4,16 +4,16 @@ import { atrPct, averageTurnover, type Stock } from "./types";
 export const TRENDLINE_LOOKBACK_SESSIONS = 20;
 export const TRENDLINE_PIVOT_RADIUS = 2;
 export const TRENDLINE_MIN_ATR_PCT = 0.015;
-export const TRENDLINE_MAX_DISTANCE_ATR = 1.5;
+export const TRENDLINE_MAX_DISTANCE_ATR = 2.5;
 export const TRENDLINE_MAX_BREAK_ATR = 0.5;
 export const TRENDLINE_ON_LINE_ATR = 0.25;
-export const TRENDLINE_BOUNCE_TOUCH_ATR = 0.35;
-export const TRENDLINE_BOUNCE_RECOVERY_ATR = 0.25;
-export const TRENDLINE_BOUNCE_MAX_DISTANCE_ATR = 2;
+export const TRENDLINE_BOUNCE_TOUCH_ATR = 0.5;
+export const TRENDLINE_BOUNCE_RECOVERY_ATR = 0.15;
+export const TRENDLINE_BOUNCE_MAX_DISTANCE_ATR = 3;
 const MIN_TURNOVER = 3_000_000;
-const MIN_ANCHOR_GAP = 8;
-const MIN_LINE_RISE = 0.02;
-const MAX_LINE_RISE = 0.35;
+const MIN_ANCHOR_GAP = 4;
+const MIN_LINE_RISE = 0.005;
+const MAX_LINE_RISE = 0.5;
 
 interface Pivot {
   index: number;
@@ -23,10 +23,12 @@ interface Pivot {
 export interface TrendlineSetup {
   stock: Stock;
   phase: TrendlinePhase;
+  quality: "stronger" | "weaker";
   supportPrice: number;
   distancePct: number;
   volatilityPct: number;
   lineRisePct: number;
+  anchorGap: number;
   touches: number;
   score: number;
 }
@@ -121,7 +123,7 @@ function setupFor(stock: Stock): TrendlineSetup | null {
     return null;
   }
 
-  const tolerance = stock.close * volatilityPct * 0.5;
+  const tolerance = stock.close * volatilityPct * 0.75;
   const possible: TrendlineSetup[] = [];
   for (let first = 0; first < turningPoints.length - 1; first += 1) {
     for (let second = first + 1; second < turningPoints.length; second += 1) {
@@ -159,13 +161,22 @@ function setupFor(stock: Stock): TrendlineSetup | null {
       const touchScore = Math.min(20, Math.max(0, touches - 1) * 10);
       const riseScore = 15 * Math.min(lineRisePct / 0.15, 1);
       const volatilityScore = 25 * Math.min(volatilityPct / 0.05, 1);
+      const quality =
+        gap >= 8 &&
+        lineRisePct >= 0.02 &&
+        touches >= 3 &&
+        Math.abs(distancePct) <= volatilityPct * 1.5
+          ? "stronger"
+          : "weaker";
       possible.push({
         stock,
         phase,
+        quality,
         supportPrice,
         distancePct,
         volatilityPct,
         lineRisePct,
+        anchorGap: gap,
         touches,
         score: proximityScore + touchScore + riseScore + volatilityScore,
       });
