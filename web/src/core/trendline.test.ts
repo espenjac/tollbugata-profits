@@ -35,7 +35,7 @@ function makeStock(overrides: Partial<Stock> = {}): Stock {
     open: 93,
     high: 95,
     previousDayHigh: 94,
-    low: 92,
+    low: 91.5,
     vwap: 94,
     recentLows: risingLows,
     ...overrides,
@@ -47,6 +47,7 @@ describe("findTrendlineSetups", () => {
     const [setup] = findTrendlineSetups([makeStock()]);
 
     expect(setup.stock.ticker).toBe("TEST");
+    expect(setup.phase).toBe("approaching");
     expect(setup.touches).toBeGreaterThanOrEqual(2);
     expect(setup.lineRisePct).toBeGreaterThan(0);
     expect(setup.distancePct).toBeGreaterThan(0);
@@ -63,5 +64,24 @@ describe("findTrendlineSetups", () => {
 
   it("does not include a stock whose price has fallen well below its line", () => {
     expect(findTrendlineSetups([makeStock({ close: 85 })])).toEqual([]);
+  });
+
+  it("separates a price resting on the line from one that just bounced", () => {
+    const [base] = findTrendlineSetups([makeStock()]);
+    const atLine = findTrendlineSetups([
+      makeStock({
+        close: base.supportPrice * 1.005,
+        low: base.supportPrice * 0.99,
+      }),
+    ]);
+    const bounced = findTrendlineSetups([
+      makeStock({
+        close: base.supportPrice * 1.03,
+        low: base.supportPrice * 0.99,
+      }),
+    ]);
+
+    expect(atLine[0]?.phase).toBe("on_line");
+    expect(bounced[0]?.phase).toBe("bounced");
   });
 });

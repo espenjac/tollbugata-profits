@@ -6,6 +6,10 @@ export const TRENDLINE_PIVOT_RADIUS = 2;
 export const TRENDLINE_MIN_ATR_PCT = 0.015;
 export const TRENDLINE_MAX_DISTANCE_ATR = 1.5;
 export const TRENDLINE_MAX_BREAK_ATR = 0.5;
+export const TRENDLINE_ON_LINE_ATR = 0.25;
+export const TRENDLINE_BOUNCE_TOUCH_ATR = 0.35;
+export const TRENDLINE_BOUNCE_RECOVERY_ATR = 0.25;
+export const TRENDLINE_BOUNCE_MAX_DISTANCE_ATR = 2;
 const MIN_TURNOVER = 3_000_000;
 const MIN_ANCHOR_GAP = 8;
 const MIN_LINE_RISE = 0.02;
@@ -18,12 +22,51 @@ interface Pivot {
 
 export interface TrendlineSetup {
   stock: Stock;
+  phase: TrendlinePhase;
   supportPrice: number;
   distancePct: number;
   volatilityPct: number;
   lineRisePct: number;
   touches: number;
   score: number;
+}
+
+export type TrendlinePhase = "approaching" | "bounced" | "on_line";
+
+function classifyPhase(
+  stock: Stock,
+  supportPrice: number,
+  distancePct: number,
+  volatilityPct: number,
+): TrendlinePhase | null {
+  const low = stock.low;
+  if (isPositive(low)) {
+    const lowDistancePct = low / supportPrice - 1;
+    const recoveryPct = (stock.close - low) / stock.close;
+    if (
+      lowDistancePct >= -volatilityPct * TRENDLINE_BOUNCE_TOUCH_ATR &&
+      lowDistancePct <= volatilityPct * TRENDLINE_BOUNCE_TOUCH_ATR &&
+      distancePct > volatilityPct * TRENDLINE_ON_LINE_ATR &&
+      distancePct <= volatilityPct * TRENDLINE_BOUNCE_MAX_DISTANCE_ATR &&
+      recoveryPct >= volatilityPct * TRENDLINE_BOUNCE_RECOVERY_ATR
+    ) {
+      return "bounced";
+    }
+  }
+
+  if (
+    distancePct >= -volatilityPct * TRENDLINE_MAX_BREAK_ATR &&
+    distancePct <= volatilityPct * TRENDLINE_ON_LINE_ATR
+  ) {
+    return "on_line";
+  }
+  if (
+    distancePct > volatilityPct * TRENDLINE_ON_LINE_ATR &&
+    distancePct <= volatilityPct * TRENDLINE_MAX_DISTANCE_ATR
+  ) {
+    return "approaching";
+  }
+  return null;
 }
 
 function isPositive(value: number | null | undefined): value is number {
@@ -104,10 +147,8 @@ function setupFor(stock: Stock): TrendlineSetup | null {
       ).length;
       const supportPrice = valueAt(lows.length);
       const distancePct = stock.close / supportPrice - 1;
-      if (
-        distancePct < -volatilityPct * TRENDLINE_MAX_BREAK_ATR ||
-        distancePct > volatilityPct * TRENDLINE_MAX_DISTANCE_ATR
-      ) {
+      const phase = classifyPhase(stock, supportPrice, distancePct, volatilityPct);
+      if (phase === null) {
         continue;
       }
 
@@ -120,6 +161,7 @@ function setupFor(stock: Stock): TrendlineSetup | null {
       const volatilityScore = 25 * Math.min(volatilityPct / 0.05, 1);
       possible.push({
         stock,
+        phase,
         supportPrice,
         distancePct,
         volatilityPct,
