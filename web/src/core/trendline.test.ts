@@ -6,6 +6,8 @@ const risingLows = [
   90, 91, 92, 93, 94, 90, 92, 94, 95, 96,
   91, 93, 95, 97, 98, 92, 94, 96, 99, 100,
 ];
+const historyPrefix = Array.from({ length: 106 }, (_, index) => 68 + index * 0.2);
+const sixMonthHistory = [...historyPrefix, ...risingLows];
 
 function makeStock(overrides: Partial<Stock> = {}): Stock {
   return {
@@ -37,21 +39,23 @@ function makeStock(overrides: Partial<Stock> = {}): Stock {
     previousDayHigh: 94,
     low: 91.5,
     vwap: 94,
-    recentLows: risingLows,
+    recentLows: sixMonthHistory,
     ...overrides,
   };
 }
 
 describe("findTrendlineSetups", () => {
-  it("finds a volatile stock close to a rising month-long support line", () => {
-    const [setup] = findTrendlineSetups([makeStock()]);
+  it("finds rising 3- and 6-month support-line setups", () => {
+    const setups = findTrendlineSetups([makeStock()]);
+    const setup = setups.find((item) => item.lookbackMonths === 3);
 
-    expect(setup.stock.ticker).toBe("TEST");
-    expect(setup.phase).toBe("approaching");
-    expect(setup.touches).toBeGreaterThanOrEqual(2);
-    expect(setup.lineRisePct).toBeGreaterThan(0);
-    expect(setup.distancePct).toBeGreaterThan(0);
-    expect(setup.distancePct).toBeLessThan(0.05);
+    expect(setup?.stock.ticker).toBe("TEST");
+    expect(setups.map((item) => item.lookbackMonths)).toContain(6);
+    expect(setup?.phase).toBe("approaching");
+    expect(setup?.touches).toBeGreaterThanOrEqual(2);
+    expect(setup?.lineRisePct).toBeGreaterThan(0);
+    expect(setup?.distancePct).toBeGreaterThan(0);
+    expect(setup?.distancePct).toBeLessThan(0.05);
   });
 
   it("ignores stocks without enough volatility, liquidity, or history", () => {
@@ -67,35 +71,43 @@ describe("findTrendlineSetups", () => {
   });
 
   it("separates a price resting on the line from one that just bounced", () => {
-    const [base] = findTrendlineSetups([makeStock()]);
+    const base = findTrendlineSetups([makeStock()]).find(
+      (item) => item.lookbackMonths === 3,
+    );
+    expect(base).toBeDefined();
     const atLine = findTrendlineSetups([
       makeStock({
-        close: base.supportPrice * 1.005,
-        low: base.supportPrice * 0.99,
+        close: base!.supportPrice * 1.005,
+        low: base!.supportPrice * 0.99,
       }),
-    ]);
+    ]).find((item) => item.lookbackMonths === 3);
     const bounced = findTrendlineSetups([
       makeStock({
-        close: base.supportPrice * 1.03,
-        low: base.supportPrice * 0.99,
+        close: base!.supportPrice * 1.03,
+        low: base!.supportPrice * 0.99,
       }),
-    ]);
+    ]).find((item) => item.lookbackMonths === 3);
 
-    expect(atLine[0]?.phase).toBe("on_line");
-    expect(bounced[0]?.phase).toBe("bounced");
+    expect(atLine?.phase).toBe("on_line");
+    expect(bounced?.phase).toBe("bounced");
   });
 
   it("keeps a weaker short-span trendline as a candidate", () => {
-    const [setup] = findTrendlineSetups([
+    const setup = findTrendlineSetups([
       makeStock({
         recentLows: [
+          ...historyPrefix,
           93, 94, 95, 94, 92, 94, 95, 96, 95, 93,
           94, 95, 96, 97, 98, 99, 100, 101, 102, 103,
         ],
       }),
-    ]);
+    ]).find((item) => item.lookbackMonths === 3);
 
-    expect(setup.anchorGap).toBeLessThan(8);
-    expect(setup.quality).toBe("weaker");
+    expect(setup?.anchorGap).toBeLessThan(8);
+    expect(setup?.quality).toBe("weaker");
+  });
+
+  it("does not label short history as a 3- or 6-month setup", () => {
+    expect(findTrendlineSetups([makeStock({ recentLows: risingLows })])).toEqual([]);
   });
 });

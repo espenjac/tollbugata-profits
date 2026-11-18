@@ -46,7 +46,9 @@ som begrenser jobben til faktiske handledager på Oslo Børs.
 egenkapitalmåling, slik at grafen kan sammenligne porteføljene med børsen.
 `0009_add_trend_simulator.sql` legger til Trend-porteføljen og oppdaterer den
 idempotente tick-funksjonen til å godta den nye modusen. `0010_simulator_push.sql`
-lagrer brukernes egne push-abonnementer med RLS.
+lagrer brukernes egne push-abonnementer med RLS. `0011_restore_simulator_benchmark.sql`
+gjenoppretter lagring av OSEBX-verdien etter at den ble utelatt ved oppdateringen
+av tick-funksjonen i `0009`.
 
 ## 3. Google-innlogging
 

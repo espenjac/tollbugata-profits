@@ -10,7 +10,10 @@ import { tradingDaysHeld } from "./journal";
 import { buildMarketReport } from "./report";
 import { DEFAULT_CRITERIA, screen } from "./screen";
 import type { MarketSnapshot } from "./snapshot";
-import { SWING_MAX_HOLDING_DAYS } from "./swing";
+import {
+  reassessedSwingTarget,
+  SWING_MAX_HOLDING_DAYS,
+} from "./swing";
 import {
   buildTrendIdeas,
   TREND_MAX_HOLDING_DAYS,
@@ -45,6 +48,7 @@ export interface SimPosition {
   stopPrice: number;
   stopPct: number;
   targetPrice: number | null;
+  targetRevised?: boolean;
   targets: SimTarget[];
   stage: number;
   /** Start date for the extended trailing-stop runner, after T3 is reached. */
@@ -313,16 +317,35 @@ function manageSwing(context: TickContext): void {
     });
     return;
   }
+
+  const held = tradingDaysHeld(position.entryAt, context.now) ?? 0;
+  if (
+    !position.targetRevised &&
+    position.targetPrice !== null &&
+    stock !== null
+  ) {
+    const revisedTarget = reassessedSwingTarget({
+      entryPrice: position.entryPrice,
+      targetPrice: position.targetPrice,
+      currentPrice: price,
+      dayReturn: stock.dayReturn,
+      heldDays: held,
+    });
+    if (revisedTarget !== null && revisedTarget < position.targetPrice) {
+      position.targetPrice = money(revisedTarget);
+      position.targetRevised = true;
+    }
+  }
+
   if (position.targetPrice !== null && price >= position.targetPrice) {
     executeSell(context, {
       quantity: position.shares,
       price,
       fee: settings.trade.sellFee,
-      reason: "Mål",
+      reason: position.targetRevised ? "Revidert mål" : "Mål",
     });
     return;
   }
-  const held = tradingDaysHeld(position.entryAt, context.now) ?? 0;
   if (held >= position.maxHoldingDays) {
     executeSell(context, {
       quantity: position.shares,

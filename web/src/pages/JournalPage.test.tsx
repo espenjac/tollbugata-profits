@@ -49,6 +49,7 @@ vi.mock("../lib/auth-context", () => ({
 }));
 
 vi.mock("../lib/api", () => ({
+  fetchMarketSnapshot: async () => ({ universe: { stocks: [] } }),
   loadJournal: async () => journalState,
   addTrade: async () => {},
   editTrade: async () => {},

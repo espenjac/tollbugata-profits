@@ -62,7 +62,7 @@ export function TrendlinesPage() {
     <div className="page trendline-page">
       <section className="hero">
         <div className="hero-copy">
-          <p className="eyebrow">Oslo Børs · positiv støtte · cirka én måned</p>
+          <p className="eyebrow">Oslo Børs · positiv støtte · 3 og 6 måneder</p>
           <h1>Trendlinjer</h1>
           <p>
             En ekstra long-only skanner for aksjer som nærmer seg en stigende
@@ -173,6 +173,7 @@ function TrendlineGroup({
             <thead>
               <tr>
                 <th>Aksje</th>
+                <th>Periode</th>
                 <th>Oppsett</th>
                 <th className="num">Kurs</th>
                 <th className="num">Trendlinje</th>
@@ -185,7 +186,7 @@ function TrendlineGroup({
             </thead>
             <tbody>
               {setups.map((setup) => (
-                <tr key={setup.stock.ticker}>
+                <tr key={`${setup.stock.ticker}-${setup.lookbackMonths}`}>
                   <td>
                     <a
                       className="trendline-ticker"
@@ -197,6 +198,7 @@ function TrendlineGroup({
                     </a>
                     <span className="trendline-name">{setup.stock.name}</span>
                   </td>
+                  <td>{setup.lookbackMonths} mnd.</td>
                   <td>{setup.quality === "stronger" ? "Sterkere" : "Svakere"}</td>
                   <td className="num">{formatPrice(setup.stock.close)} kr</td>
                   <td className="num">{formatPrice(setup.supportPrice)} kr</td>

@@ -12,12 +12,14 @@ import {
   type TradeEntry,
   type TradeInput,
 } from "../core/journal";
+import type { Stock } from "../core/types";
 import {
   parseJournalPrefill,
   type JournalPrefill,
 } from "../core/journalPrefill";
 import { useAuth } from "../lib/auth-context";
 import { useJournal } from "../lib/useJournal";
+import { fetchMarketSnapshot } from "../lib/api";
 import {
   ErrorPanel,
   InlineNotice,
@@ -131,6 +133,25 @@ export function JournalPage() {
   const [cashForm, setCashForm] = useState({ amount: "", note: "" });
   const [cashError, setCashError] = useState<string | null>(null);
   const [cashSaving, setCashSaving] = useState(false);
+  const [marketStocks, setMarketStocks] = useState<Stock[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    const loadMarket = async () => {
+      try {
+        const snapshot = await fetchMarketSnapshot();
+        if (active) {
+          setMarketStocks(snapshot.universe.stocks);
+        }
+      } catch {
+        // Journal editing remains available if market data is temporarily down.
+      }
+    };
+    void loadMarket();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!prefill) {
@@ -263,8 +284,18 @@ export function JournalPage() {
     form.side === "sell"
       ? summary.holdings.find((holding) => holding.ticker === form.ticker)
       : null;
+  const planForHolding = (holding: Holding) => {
+    const stock = marketStocks.find((item) => item.ticker === holding.ticker);
+    return holdingPlan(
+      holding,
+      DEFAULT_SETTINGS.trade,
+      stock
+        ? { currentPrice: stock.close, dayReturn: stock.dayReturn }
+        : undefined,
+    );
+  };
   const selectedPlan = selectedHolding
-    ? holdingPlan(selectedHolding, DEFAULT_SETTINGS.trade)
+    ? planForHolding(selectedHolding)
     : null;
 
   const startEdit = (trade: TradeEntry) => {
@@ -275,7 +306,7 @@ export function JournalPage() {
   };
 
   const startSell = (holding: Holding) => {
-    const plan = holdingPlan(holding, DEFAULT_SETTINGS.trade);
+    const plan = planForHolding(holding);
     setForm({
       ...emptyTradeForm("sell"),
       ticker: holding.ticker,
@@ -604,7 +635,7 @@ export function JournalPage() {
               </thead>
               <tbody>
                 {summary.holdings.map((holding) => {
-                  const plan = holdingPlan(holding, DEFAULT_SETTINGS.trade);
+                  const plan = planForHolding(holding);
                   const held = tradingDaysHeld(holding.openedAt);
                   const overdue =
                     held !== null &&
@@ -644,6 +675,7 @@ export function JournalPage() {
                           <span className="holding-target">
                             <strong>{formatPrice(plan.targetPrice)} kr</strong>
                             <small>
+                              {plan.targetRevised ? "revurdert · " : ""}
                               netto {formatMoney(plan.targetNet, 0, true)} ·
                               stop {formatPrice(plan.stopPrice)}
                             </small>

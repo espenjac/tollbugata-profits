@@ -4,7 +4,7 @@ import {
   isOsloMarketOpenDay,
   osloDateString,
 } from "./dates";
-import { tradeLevels } from "./swing";
+import { reassessedSwingTarget, tradeLevels } from "./swing";
 
 const TICKER_RE = /^[A-Z0-9][A-Z0-9._-]{0,19}$/;
 
@@ -48,6 +48,7 @@ export interface Holding {
 
 export interface HoldingPlan {
   targetPrice: number;
+  targetRevised: boolean;
   targetNet: number;
   stopPrice: number;
   stopNet: number;
@@ -58,13 +59,26 @@ export interface HoldingPlan {
 export function holdingPlan(
   holding: Holding,
   config: TradeConfig,
+  market?: { currentPrice: number; dayReturn: number | null },
+  now: Date = new Date(),
 ): HoldingPlan | null {
   const cost = holding.averageCost;
   if (cost === null || cost <= 0 || holding.quantity <= 0) {
     return null;
   }
   const levels = tradeLevels(config, null);
-  const targetPrice = cost * (1 + levels.targetPct);
+  const originalTargetPrice = cost * (1 + levels.targetPct);
+  const heldDays = tradingDaysHeld(holding.openedAt, now);
+  const revisedTarget = market
+    ? reassessedSwingTarget({
+        entryPrice: cost,
+        targetPrice: originalTargetPrice,
+        currentPrice: market.currentPrice,
+        dayReturn: market.dayReturn,
+        heldDays,
+      })
+    : null;
+  const targetPrice = revisedTarget ?? originalTargetPrice;
   const stopPrice = cost * (1 - levels.stopPct);
   const slippage = Math.max(0, config.slippagePct);
   const targetNet = money(
@@ -79,6 +93,7 @@ export function holdingPlan(
   );
   return {
     targetPrice,
+    targetRevised: revisedTarget !== null,
     targetNet,
     stopPrice,
     stopNet,

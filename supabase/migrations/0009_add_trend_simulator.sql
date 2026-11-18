@@ -22,6 +22,7 @@ declare
   v_tick_id uuid := (p_tick ->> 'tickId')::uuid;
   v_ran_at timestamptz := coalesce((p_tick ->> 'ranAt')::timestamptz, now());
   v_snapshot_at timestamptz := (p_tick ->> 'snapshotAt')::timestamptz;
+  v_benchmark numeric := nullif(p_tick ->> 'benchmark', '')::numeric;
   v_portfolio jsonb;
   v_trade jsonb;
   v_mode text;
@@ -94,6 +95,7 @@ begin
       cash,
       position_value,
       equity,
+      benchmark,
       recorded_at
     )
     values (
@@ -102,6 +104,7 @@ begin
       (v_portfolio #>> '{equity,cash}')::numeric,
       (v_portfolio #>> '{equity,positionValue}')::numeric,
       (v_portfolio #>> '{equity,equity}')::numeric,
+      v_benchmark,
       v_ran_at
     )
     on conflict (mode, recorded_at) do nothing;

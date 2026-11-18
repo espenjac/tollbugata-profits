@@ -1593,6 +1593,20 @@ var SWING_MAX_STOP_PCT = .06;
 var SWING_TARGET_STOP_MULTIPLE = 1.8;
 var SWING_MIN_TARGET_PCT = .08;
 var SWING_MAX_TARGET_PCT = .1;
+var SWING_REVISED_TARGET_PROGRESS = .9;
+/**
+* Reassess a swing target once the position is at least 80% of the way to its
+* original target, has been held for three sessions, and is no longer moving
+* meaningfully higher that day. The revised target preserves 90% of the
+* originally planned price gain; it never widens the target.
+*/
+function reassessedSwingTarget(input) {
+	const { entryPrice, targetPrice, currentPrice, dayReturn, heldDays } = input;
+	if (!Number.isFinite(entryPrice) || !Number.isFinite(targetPrice) || !Number.isFinite(currentPrice) || entryPrice <= 0 || targetPrice <= entryPrice || currentPrice <= 0 || dayReturn === null || !Number.isFinite(dayReturn) || heldDays === null || heldDays < 3 || dayReturn > .005) return null;
+	const plannedGain = targetPrice - entryPrice;
+	if ((currentPrice - entryPrice) / plannedGain < .8) return null;
+	return entryPrice + plannedGain * SWING_REVISED_TARGET_PROGRESS;
+}
 function clamp$2(value, minimum, maximum) {
 	return Math.min(maximum, Math.max(minimum, value));
 }
@@ -2445,7 +2459,8 @@ function manageSwing(context) {
 	const { state, settings } = context;
 	const position = state.position;
 	if (position === null) return;
-	const price = updatePrice(position, stockFor(context.snapshot, position.ticker));
+	const stock = stockFor(context.snapshot, position.ticker);
+	const price = updatePrice(position, stock);
 	position.stopPrice = Math.max(position.stopPrice, money(position.highestPrice * (1 - position.stopPct)));
 	if (price <= position.stopPrice) {
 		executeSell(context, {
@@ -2456,16 +2471,30 @@ function manageSwing(context) {
 		});
 		return;
 	}
+	const held = tradingDaysHeld(position.entryAt, context.now) ?? 0;
+	if (!position.targetRevised && position.targetPrice !== null && stock !== null) {
+		const revisedTarget = reassessedSwingTarget({
+			entryPrice: position.entryPrice,
+			targetPrice: position.targetPrice,
+			currentPrice: price,
+			dayReturn: stock.dayReturn,
+			heldDays: held
+		});
+		if (revisedTarget !== null && revisedTarget < position.targetPrice) {
+			position.targetPrice = money(revisedTarget);
+			position.targetRevised = true;
+		}
+	}
 	if (position.targetPrice !== null && price >= position.targetPrice) {
 		executeSell(context, {
 			quantity: position.shares,
 			price,
 			fee: settings.trade.sellFee,
-			reason: "Mål"
+			reason: position.targetRevised ? "Revidert mål" : "Mål"
 		});
 		return;
 	}
-	if ((tradingDaysHeld(position.entryAt, context.now) ?? 0) >= position.maxHoldingDays) executeSell(context, {
+	if (held >= position.maxHoldingDays) executeSell(context, {
 		quantity: position.shares,
 		price,
 		fee: settings.trade.sellFee,
@@ -2783,7 +2812,6 @@ function runSimulatorTick(input) {
 	}
 	return results;
 }
-// src/core/market.ts
 var SCANNER_COLUMNS = [
 	"name",
 	"description",
@@ -2816,7 +2844,8 @@ var SCANNER_COLUMNS = [
 	"high",
 	"high[1]",
 	"low",
-	"VWAP"
+	"VWAP",
+	...Array.from({ length: 126 }, (_, index) => `low[${126 - index}]`)
 ];
 var MarketDataError = class extends Error {
 	constructor(message) {
@@ -2899,7 +2928,11 @@ function parseScannerPayload(payload, growthTickers = []) {
 			high: numberValue(values.get("high")),
 			previousDayHigh: numberValue(values.get("high[1]")),
 			low: numberValue(values.get("low")),
-			vwap: numberValue(values.get("VWAP"))
+			vwap: numberValue(values.get("VWAP")),
+			recentLows: Array.from({ length: 126 }, (_, index) => {
+				const value = numberValue(values.get(`low[${126 - index}]`));
+				return value !== null && value > 0 ? value : null;
+			})
 		});
 	}
 	return stocks;

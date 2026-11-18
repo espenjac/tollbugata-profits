@@ -23,6 +23,10 @@ const recentLows = [
   90, 91, 92, 93, 94, 90, 92, 94, 95, 96,
   91, 93, 95, 97, 98, 92, 94, 96, 99, 100,
 ];
+const longHistory = [
+  ...Array.from({ length: 106 }, (_, index) => 68 + index * 0.2),
+  ...recentLows,
+];
 
 function makeStock(): Stock {
   return {
@@ -54,7 +58,7 @@ function makeStock(): Stock {
     previousDayHigh: 94,
     low: 91.5,
     vwap: 94,
-    recentLows,
+    recentLows: longHistory,
   };
 }
 
@@ -91,10 +95,12 @@ describe("TrendlinesPage", () => {
     const text = container.textContent ?? "";
 
     expect(text).toContain("Trendlinjer");
-    expect(text).toContain("Nærmer seg trendlinjen (1)");
+    expect(text).toContain("Nærmer seg trendlinjen (2)");
     expect(text).toContain("Nylig sprett på trendlinjen (0)");
     expect(text).toContain("På trendlinjen (0)");
     expect(text).toContain("TEST");
+    expect(text).toContain("3 mnd.");
+    expect(text).toContain("6 mnd.");
     expect(text).toContain("ATR/dag");
     expect(text).toContain("10,0 %");
   });

@@ -1,7 +1,10 @@
 import { atrPct, averageTurnover, type Stock } from "./types";
 
 /** Trendline scanner settings are deliberately conservative and not optimized. */
-export const TRENDLINE_LOOKBACK_SESSIONS = 20;
+export const TRENDLINE_LOOKBACKS = [
+  { months: 3, sessions: 63 },
+  { months: 6, sessions: 126 },
+] as const;
 export const TRENDLINE_PIVOT_RADIUS = 2;
 export const TRENDLINE_MIN_ATR_PCT = 0.015;
 export const TRENDLINE_MAX_DISTANCE_ATR = 2.5;
@@ -22,6 +25,7 @@ interface Pivot {
 
 export interface TrendlineSetup {
   stock: Stock;
+  lookbackMonths: 3 | 6;
   phase: TrendlinePhase;
   quality: "stronger" | "weaker";
   supportPrice: number;
@@ -96,8 +100,14 @@ function pivots(lows: Array<number | null>): Pivot[] {
   return found;
 }
 
-function setupFor(stock: Stock): TrendlineSetup | null {
-  const lows = stock.recentLows?.slice(-TRENDLINE_LOOKBACK_SESSIONS);
+function setupFor(
+  stock: Stock,
+  lookback: (typeof TRENDLINE_LOOKBACKS)[number],
+): TrendlineSetup | null {
+  const history = stock.recentLows;
+  const lows = history && history.length >= lookback.sessions
+    ? history.slice(-lookback.sessions)
+    : null;
   const volatilityPct = atrPct(stock);
   const turnover = averageTurnover(stock);
   if (
@@ -170,6 +180,7 @@ function setupFor(stock: Stock): TrendlineSetup | null {
           : "weaker";
       possible.push({
         stock,
+        lookbackMonths: lookback.months,
         phase,
         quality,
         supportPrice,
@@ -185,19 +196,22 @@ function setupFor(stock: Stock): TrendlineSetup | null {
   return possible.sort((left, right) => right.score - left.score)[0] ?? null;
 }
 
-/** Finds liquid, higher-volatility Oslo shares approaching a rising 1-month support line. */
+/** Finds liquid, higher-volatility Oslo shares approaching rising 3- or 6-month support lines. */
 export function findTrendlineSetups(stocks: Iterable<Stock>): TrendlineSetup[] {
   const setups: TrendlineSetup[] = [];
   for (const stock of stocks) {
-    const setup = setupFor(stock);
-    if (setup) {
-      setups.push(setup);
+    for (const lookback of TRENDLINE_LOOKBACKS) {
+      const setup = setupFor(stock, lookback);
+      if (setup) {
+        setups.push(setup);
+      }
     }
   }
   return setups.sort(
     (left, right) =>
       right.score - left.score ||
       right.volatilityPct - left.volatilityPct ||
-      left.stock.ticker.localeCompare(right.stock.ticker),
+      left.stock.ticker.localeCompare(right.stock.ticker) ||
+      left.lookbackMonths - right.lookbackMonths,
   );
 }

@@ -40,6 +40,41 @@ describe("holdingPlan", () => {
     expect(plan?.targetNet).toBeGreaterThan(0);
   });
 
+  it("revises a near target after three stagnant trading days", () => {
+    const plan = holdingPlan(
+      holding({ openedAt: "2026-11-03T09:30:00+01:00" }),
+      CONFIG,
+      { currentPrice: 108.5, dayReturn: 0 },
+      new Date("2026-11-05T12:00:00+01:00"),
+    );
+
+    expect(plan?.targetRevised).toBe(true);
+    expect(plan?.targetPrice).toBeCloseTo(100.58 * 1.081);
+    expect(plan?.targetNet).toBeCloseTo(
+      50 * (plan?.targetPrice ?? 0) - 5029 - CONFIG.sellFee,
+    );
+  });
+
+  it("keeps the original target when the move is not stagnant or near enough", () => {
+    const openedAt = "2026-11-03T09:30:00+01:00";
+    const now = new Date("2026-11-05T12:00:00+01:00");
+    const rising = holdingPlan(
+      holding({ openedAt }),
+      CONFIG,
+      { currentPrice: 108.5, dayReturn: 0.01 },
+      now,
+    );
+    const farFromTarget = holdingPlan(
+      holding({ openedAt }),
+      CONFIG,
+      { currentPrice: 106, dayReturn: 0 },
+      now,
+    );
+
+    expect(rising?.targetRevised).toBe(false);
+    expect(farFromTarget?.targetRevised).toBe(false);
+  });
+
   it("has no plan for an empty or short position", () => {
     expect(holdingPlan(holding({ quantity: 0 }), CONFIG)).toBeNull();
     expect(holdingPlan(holding({ averageCost: null }), CONFIG)).toBeNull();

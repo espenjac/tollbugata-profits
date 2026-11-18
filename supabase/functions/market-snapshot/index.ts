@@ -26,6 +26,7 @@ const SCAN_TTL_SECONDS = 600;
 const OPEN_SCAN_TTL_SECONDS = 30;
 const NEWS_TTL_SECONDS = 300;
 const GROWTH_TTL_SECONDS = 24 * 60 * 60;
+const TRENDLINE_HISTORY_SESSIONS = 126;
 
 const SCAN_COLUMNS = [
   "name",
@@ -60,6 +61,10 @@ const SCAN_COLUMNS = [
   "high[1]",
   "low",
   "VWAP",
+  ...Array.from(
+    { length: TRENDLINE_HISTORY_SESSIONS },
+    (_, index) => `low[${TRENDLINE_HISTORY_SESSIONS - index}]`,
+  ),
 ];
 
 const USER_AGENT =
@@ -661,7 +666,7 @@ serve(async (request) => {
     const [scan, growth, news, benchmark] = await Promise.all([
       // Version the cache key when the scanner column order changes so cached
       // rows from the previous schema cannot be parsed with shifted indexes.
-      getScan("scan-v2", scanTtl),
+      getScan("scan-v3", scanTtl),
       getGrowth(),
       getNews(),
       getBenchmark(scanTtl),

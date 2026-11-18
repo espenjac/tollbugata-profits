@@ -18,6 +18,8 @@ describe("parseScannerPayload", () => {
     set("low", 99);
     set("VWAP", 100.5);
     set("low[20]", 90);
+    set("low[63]", 95);
+    set("low[126]", 80);
     set("low[1]", 98);
 
     const stocks = parseScannerPayload({
@@ -34,8 +36,9 @@ describe("parseScannerPayload", () => {
       low: 99,
       vwap: 100.5,
     });
-    expect(stocks[0].recentLows).toHaveLength(20);
-    expect(stocks[0].recentLows?.[0]).toBe(90);
-    expect(stocks[0].recentLows?.[19]).toBe(98);
+    expect(stocks[0].recentLows).toHaveLength(126);
+    expect(stocks[0].recentLows?.[0]).toBe(80);
+    expect(stocks[0].recentLows?.[63]).toBe(95);
+    expect(stocks[0].recentLows?.[125]).toBe(98);
   });
 });

@@ -8,12 +8,55 @@ export const SWING_MAX_STOP_PCT = 0.06;
 export const SWING_TARGET_STOP_MULTIPLE = 1.8;
 export const SWING_MIN_TARGET_PCT = 0.08;
 export const SWING_MAX_TARGET_PCT = 0.1;
+export const SWING_TARGET_REVIEW_AFTER_DAYS = 3;
+export const SWING_TARGET_REVIEW_PROGRESS = 0.8;
+export const SWING_REVISED_TARGET_PROGRESS = 0.9;
+export const SWING_STAGNATION_DAY_RETURN = 0.005;
 
 export interface TradeLevels {
   mode: TradeMode;
   targetPct: number;
   stopPct: number;
   maxHoldingDays: number;
+}
+
+/**
+ * Reassess a swing target once the position is at least 80% of the way to its
+ * original target, has been held for three sessions, and is no longer moving
+ * meaningfully higher that day. The revised target preserves 90% of the
+ * originally planned price gain; it never widens the target.
+ */
+export function reassessedSwingTarget(input: {
+  entryPrice: number;
+  targetPrice: number;
+  currentPrice: number;
+  dayReturn: number | null;
+  heldDays: number | null;
+}): number | null {
+  const { entryPrice, targetPrice, currentPrice, dayReturn, heldDays } = input;
+  if (
+    !Number.isFinite(entryPrice) ||
+    !Number.isFinite(targetPrice) ||
+    !Number.isFinite(currentPrice) ||
+    entryPrice <= 0 ||
+    targetPrice <= entryPrice ||
+    currentPrice <= 0 ||
+    dayReturn === null ||
+    !Number.isFinite(dayReturn) ||
+    heldDays === null ||
+    heldDays < SWING_TARGET_REVIEW_AFTER_DAYS ||
+    dayReturn > SWING_STAGNATION_DAY_RETURN
+  ) {
+    return null;
+  }
+
+  const plannedGain = targetPrice - entryPrice;
+  const progress = (currentPrice - entryPrice) / plannedGain;
+  if (progress < SWING_TARGET_REVIEW_PROGRESS) {
+    return null;
+  }
+
+  return entryPrice + plannedGain * SWING_REVISED_TARGET_PROGRESS;
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {

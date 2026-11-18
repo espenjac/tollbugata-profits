@@ -254,6 +254,31 @@ describe("runSimulatorTick", () => {
     expect(sell.realizedPnl).toBeCloseTo(40 * (111 - 100) - 29 - 29, 2);
   });
 
+  it("revises a near swing target after three stagnant days and exits there", () => {
+    const review = run(
+      {
+        swing: seedPosition({
+          ticker: "HOLD",
+          entryAt: "2026-11-03T09:30:00+01:00",
+          targetPrice: 110,
+        }),
+      },
+      makeSnapshot([passiveStock({ close: 108.5, dayReturn: 0 })]),
+    );
+    const reviewedPosition = stateFor(review, "swing").position;
+
+    expect(tradesFor(review, "swing")).toHaveLength(0);
+    expect(reviewedPosition?.targetRevised).toBe(true);
+    expect(reviewedPosition?.targetPrice).toBeCloseTo(109);
+
+    const exit = run(
+      { swing: stateFor(review, "swing") },
+      makeSnapshot([passiveStock({ close: 109, dayReturn: 0 })]),
+    );
+    expect(tradesFor(exit, "swing")[0].reason).toBe("Revidert mål");
+    expect(stateFor(exit, "swing").position).toBeNull();
+  });
+
   it("ratchets the swing stop upwards as the price rises", () => {
     const results = run(
       {
