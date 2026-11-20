@@ -55,13 +55,13 @@ function makeStock(overrides: Partial<Stock> = {}): Stock {
 }
 
 describe("findTrendlineSetups", () => {
-  it("finds rising 3- and 6-month support-line setups", () => {
+  it("keeps short anchor spans in the 1-month view instead of duplicating them", () => {
     const setups = findTrendlineSetups([makeStock()]);
-    const setup = setups.find((item) => item.lookbackMonths === 3);
+    const setup = setups.find((item) => item.lookbackMonths === 1);
 
     expect(setup?.stock.ticker).toBe("TEST");
-    expect(setups.map((item) => item.lookbackMonths)).toContain(6);
-    expect(setups.map((item) => item.lookbackMonths)).toContain(1);
+    expect(setups.map((item) => item.lookbackMonths)).toEqual([1]);
+    expect(setup?.anchorGap).toBeLessThanOrEqual(20);
     expect(setup?.phase).toBe("approaching");
     expect(setup?.touches).toBeGreaterThanOrEqual(2);
     expect(setup?.lineRisePct).toBeGreaterThan(0);
@@ -97,7 +97,7 @@ describe("findTrendlineSetups", () => {
 
   it("separates a price resting on the line from one that just bounced", () => {
     const base = findTrendlineSetups([makeStock()]).find(
-      (item) => item.lookbackMonths === 3,
+      (item) => item.lookbackMonths === 1,
     );
     expect(base).toBeDefined();
     const atLine = findTrendlineSetups([
@@ -105,13 +105,13 @@ describe("findTrendlineSetups", () => {
         close: base!.supportPrice * 1.005,
         low: base!.supportPrice * 1.001,
       }),
-    ]).find((item) => item.lookbackMonths === 3);
+    ]).find((item) => item.lookbackMonths === 1);
     const bounced = findTrendlineSetups([
       makeStock({
         close: base!.supportPrice * 1.03,
         low: base!.supportPrice * 1.001,
       }),
-    ]).find((item) => item.lookbackMonths === 3);
+    ]).find((item) => item.lookbackMonths === 1);
 
     expect(atLine?.phase).toBe("on_line");
     expect(bounced?.phase).toBe("bounced");
@@ -127,7 +127,7 @@ describe("findTrendlineSetups", () => {
           94, 95, 96, 97, 98, 99, 100, 101, 102, 103,
         ],
       }),
-    ]).find((item) => item.lookbackMonths === 3);
+    ]).find((item) => item.lookbackMonths === 1);
 
     expect(setup?.anchorGap).toBeLessThan(8);
     expect(setup?.quality).toBe("weaker");

@@ -101,13 +101,13 @@ describe("TrendlinesPage", () => {
     const text = container.textContent ?? "";
 
     expect(text).toContain("Trendlinjer");
-    expect(text).toContain("Trendlinjeoppsett (3)");
-    expect(text).toContain("Nærmer seg trendlinjen (3)");
+    expect(text).toContain("Trendlinjeoppsett (1)");
+    expect(text).toContain("Nærmer seg trendlinjen (1)");
     expect(text).toContain("Nylig sprett på trendlinjen (0)");
     expect(text).toContain("På trendlinjen (0)");
     expect(text).toContain("TEST");
-    expect(text).toContain("3 mnd.");
-    expect(text).toContain("6 mnd.");
+    expect(text).not.toContain("3 mnd.");
+    expect(text).not.toContain("6 mnd.");
     expect(text).toContain("ATR/dag");
     expect(text).toContain("10,0 %");
   });
@@ -142,7 +142,7 @@ describe("TrendlinesPage", () => {
 
   it("shows the five highest-scoring setups per category before expanding", () => {
     mockState.snapshot = snapshot(
-      Array.from({ length: 3 }, (_, index) => ({
+      Array.from({ length: 6 }, (_, index) => ({
         ...makeStock(),
         ticker: `TEST${index}`,
       })),
@@ -153,7 +153,7 @@ describe("TrendlinesPage", () => {
     );
 
     expect(group.getAllByRole("row")).toHaveLength(6);
-    fireEvent.click(group.getByRole("button", { name: "Vis alle 9 oppsett" }));
-    expect(group.getAllByRole("row")).toHaveLength(10);
+    fireEvent.click(group.getByRole("button", { name: "Vis alle 6 oppsett" }));
+    expect(group.getAllByRole("row")).toHaveLength(7);
   });
 });

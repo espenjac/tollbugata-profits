@@ -343,10 +343,14 @@ function setupFor(
 /** Finds liquid, higher-volatility Oslo shares approaching rising 1-, 3-, or 6-month support lines. */
 export function findTrendlineSetups(stocks: Iterable<Stock>): TrendlineSetup[] {
   const setups: TrendlineSetup[] = [];
+  const oneMonthAnchorSpan = TRENDLINE_LOOKBACKS[0].sessions - 1;
   for (const stock of stocks) {
     for (const lookback of TRENDLINE_LOOKBACKS) {
       const setup = setupFor(stock, lookback);
-      if (setup) {
+      if (
+        setup &&
+        (lookback.months === 1 || setup.anchorGap > oneMonthAnchorSpan)
+      ) {
         setups.push(setup);
       }
     }
