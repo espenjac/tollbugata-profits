@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ErrorPanel, InlineNotice, LoadingView } from "../components/ui";
-import { formatDateTime } from "../core/format";
+import { formatDate, formatDateTime } from "../core/format";
 import {
   findTrendlineSetups,
   type TrendlinePhase,
@@ -18,17 +18,17 @@ const TRENDLINE_GROUPS: Array<{
   {
     phase: "approaching",
     title: "Nærmer seg trendlinjen",
-    explanation: "Kursen ligger over støtten, innenfor ca. 2,5 ATR.",
+    explanation: "Uken peker ned, kursen er over støtten og innenfor ca. 2,5 ATR.",
   },
   {
     phase: "bounced",
     title: "Nylig sprett på trendlinjen",
-    explanation: "Siste dagsbunn var ved støtten, og kursen har hentet seg opp.",
+    explanation: "En av de siste fem dagsbunnene testet støtten, og kursen har hentet seg opp.",
   },
   {
     phase: "on_line",
     title: "På trendlinjen",
-    explanation: "Kursen ligger innenfor ca. 0,25 ATR fra støtten.",
+    explanation: "Kursen ligger på eller like over støtten, innenfor ca. 0,25 ATR.",
   },
 ];
 
@@ -180,6 +180,7 @@ function TrendlineGroup({
               <tr>
                 <th>Aksje</th>
                 <th>Periode</th>
+                <th>Ankerpunkter</th>
                 <th>Oppsett</th>
                 <th className="num">Kurs</th>
                 <th className="num">Trendlinje</th>
@@ -205,6 +206,7 @@ function TrendlineGroup({
                     <span className="trendline-name">{setup.stock.name}</span>
                   </td>
                   <td>{setup.lookbackMonths} mnd.</td>
+                  <td>{formatAnchorRange(setup.anchorStartDate, setup.anchorEndDate)}</td>
                   <td>{setup.quality === "stronger" ? "Sterkere" : "Svakere"}</td>
                   <td className="num">{formatPrice(setup.stock.close)} kr</td>
                   <td className="num">{formatPrice(setup.supportPrice)} kr</td>
@@ -243,4 +245,10 @@ function formatPercent(value: number | null): string {
 
 function formatPrice(value: number): string {
   return value.toFixed(2).replace(".", ",");
+}
+
+function formatAnchorRange(start: string | null, end: string | null): string {
+  const from = start ? formatDate(start) : "–";
+  const to = end ? formatDate(end) : start ? "Siste økt" : "–";
+  return `${from} → ${to}`;
 }

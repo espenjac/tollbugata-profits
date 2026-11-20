@@ -9,7 +9,6 @@ export const TRENDLINE_LOOKBACKS = [
 export const TRENDLINE_PIVOT_RADIUS = 2;
 export const TRENDLINE_MIN_ATR_PCT = 0.015;
 export const TRENDLINE_MAX_DISTANCE_ATR = 2.5;
-export const TRENDLINE_MAX_BREAK_ATR = 0.5;
 export const TRENDLINE_ON_LINE_ATR = 0.25;
 export const TRENDLINE_BOUNCE_TOUCH_ATR = 0.5;
 export const TRENDLINE_BOUNCE_RECOVERY_ATR = 0.15;
@@ -30,6 +29,8 @@ export interface TrendlineSetup {
   phase: TrendlinePhase;
   quality: "stronger" | "weaker";
   supportPrice: number;
+  anchorStartDate: string | null;
+  anchorEndDate: string | null;
   distancePct: number;
   volatilityPct: number;
   lineRisePct: number;
@@ -48,22 +49,29 @@ function classifyPhase(
   supportAt: (index: number) => number,
 ): TrendlinePhase | null {
   const currentIndex = lows.length - 1;
-  const recentlyTouched = lows
-    .slice(-4)
-    .some((low, offset, recentLows) => {
-      if (!isPositive(low)) {
-        return false;
-      }
-      const index = currentIndex - recentLows.length + 1 + offset;
-      const line = supportAt(index);
-      const lowDistancePct = low / line - 1;
-      const recoveryPct = (stock.close - low) / stock.close;
-      return (
-        lowDistancePct >= -volatilityPct * TRENDLINE_BOUNCE_TOUCH_ATR &&
-        lowDistancePct <= volatilityPct * TRENDLINE_BOUNCE_TOUCH_ATR &&
-        recoveryPct >= volatilityPct * TRENDLINE_BOUNCE_RECOVERY_ATR
-      );
-    });
+  const recentLows = lows.slice(-5);
+  const recentStart = currentIndex - recentLows.length + 1;
+  const recentDistances = recentLows.map((low, offset) => {
+    if (!isPositive(low)) {
+      return null;
+    }
+    const index = recentStart + offset;
+    return {
+      low,
+      distance: low / supportAt(index) - 1,
+    };
+  });
+  const recentlyTouched = recentDistances.some((item) => {
+    if (item === null) {
+      return false;
+    }
+    const recoveryPct = (stock.close - item.low) / stock.close;
+    return (
+      item.distance >= -volatilityPct * TRENDLINE_BOUNCE_TOUCH_ATR &&
+      item.distance <= volatilityPct * TRENDLINE_BOUNCE_TOUCH_ATR &&
+      recoveryPct >= volatilityPct * TRENDLINE_BOUNCE_RECOVERY_ATR
+    );
+  });
   if (recentlyTouched) {
     if (
       distancePct > volatilityPct * TRENDLINE_ON_LINE_ATR &&
@@ -74,14 +82,16 @@ function classifyPhase(
   }
 
   if (
-    distancePct >= -volatilityPct * TRENDLINE_MAX_BREAK_ATR &&
+    distancePct >= 0 &&
     distancePct <= volatilityPct * TRENDLINE_ON_LINE_ATR
   ) {
     return "on_line";
   }
   if (
     distancePct > volatilityPct * TRENDLINE_ON_LINE_ATR &&
-    distancePct <= volatilityPct * TRENDLINE_MAX_DISTANCE_ATR
+    distancePct <= volatilityPct * TRENDLINE_MAX_DISTANCE_ATR &&
+    stock.weekReturn !== null &&
+    stock.weekReturn < 0
   ) {
     return "approaching";
   }
@@ -113,7 +123,15 @@ function pivots(lows: Array<number | null>): Pivot[] {
       neighbors.every((value) => price <= value) &&
       neighbors.some((value) => price < value)
     ) {
-      found.push({ index, price });
+      const previous = found.at(-1);
+      const equalLow = previous &&
+        Math.abs(previous.price - price) <= Math.max(price, previous.price) * 1e-6;
+      if (equalLow && index - previous.index <= radius * 2) {
+        // Treat a flat-bottom cluster as one pivot, anchored at its last bar.
+        found[found.length - 1] = { index, price };
+      } else {
+        found.push({ index, price });
+      }
     }
   }
   return found;
@@ -127,6 +145,7 @@ function setupFor(
   const lows = history && history.length >= lookback.sessions
     ? history.slice(-lookback.sessions)
     : null;
+  const dates = stock.recentLowDates?.slice(-lookback.sessions) ?? [];
   const volatilityPct = atrPct(stock);
   const turnover = averageTurnover(stock);
   if (
@@ -152,6 +171,20 @@ function setupFor(
   if (validLows.length < 10 || turningPoints.length < 2) {
     return null;
   }
+  const historicalPivots = turningPoints.filter(
+    (point) => point.index < lows.length,
+  );
+  if (historicalPivots.length < 2) {
+    return null;
+  }
+  const latestPivot = historicalPivots[historicalPivots.length - 1];
+  const previousPivot = historicalPivots[historicalPivots.length - 2];
+  // A line must terminate at the latest confirmed swing low, and that low
+  // must be higher than the prior swing low. This prevents re-anchoring a
+  // long-lookback line below a previously broken uptrend.
+  if (latestPivot.price <= previousPivot.price) {
+    return null;
+  }
 
   const tolerance = stock.close * volatilityPct * 0.75;
   const possible: TrendlineSetup[] = [];
@@ -159,6 +192,9 @@ function setupFor(
     for (let second = first + 1; second < turningPoints.length; second += 1) {
       const older = turningPoints[first];
       const newer = turningPoints[second];
+      if (newer.index !== latestPivot.index) {
+        continue;
+      }
       const gap = newer.index - older.index;
       if (gap < MIN_ANCHOR_GAP) {
         continue;
@@ -211,6 +247,8 @@ function setupFor(
         phase,
         quality,
         supportPrice,
+        anchorStartDate: dates[older.index] ?? null,
+        anchorEndDate: dates[newer.index] ?? null,
         distancePct,
         volatilityPct,
         lineRisePct,

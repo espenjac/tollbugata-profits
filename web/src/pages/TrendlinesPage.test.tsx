@@ -34,7 +34,7 @@ function makeStock(): Stock {
     name: "Test ASA",
     close: 94,
     currency: "NOK",
-    weekReturn: 0.04,
+    weekReturn: -0.04,
     monthReturn: 0.1,
     quarterReturn: 0.18,
     sma5: 94,

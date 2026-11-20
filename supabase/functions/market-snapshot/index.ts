@@ -420,10 +420,10 @@ function trendlineHistoryTickers(
   return [...tickers];
 }
 
-function parseYahooLows(
+function parseYahooHistory(
   payload: Record<string, unknown>,
   today: string,
-): Array<number | null> {
+): { dates: string[]; lows: Array<number | null> } {
   const chart = payload.chart as Record<string, unknown> | undefined;
   const result = Array.isArray(chart?.result)
     ? chart.result[0] as Record<string, unknown> | undefined
@@ -436,7 +436,7 @@ function parseYahooLows(
     ? indicators.quote[0] as Record<string, unknown> | undefined
     : undefined;
   const lows = Array.isArray(quotes?.low) ? quotes.low as unknown[] : [];
-  const history: Array<{ date: string; low: number | null }> = [];
+  const history: Array<{ date: string; low: number }> = [];
 
   for (let index = 0; index < Math.min(timestamps.length, lows.length); index += 1) {
     const timestamp = numberOrNull(timestamps[index]);
@@ -452,20 +452,33 @@ function parseYahooLows(
       history.push({ date, low });
     }
   }
-  return history
-    .slice(-TRENDLINE_HISTORY_SESSIONS)
-    .map((item) => item.low);
+  const recent = history.slice(-TRENDLINE_HISTORY_SESSIONS);
+  return {
+    dates: recent.map((item) => item.date),
+    lows: recent.map((item) => item.low),
+  };
 }
 
 async function getTickerTrendlineHistory(ticker: string, today: string) {
-  const cacheKey = `trendline-lows:${normalizeTicker(ticker)}`;
+  const cacheKey = `trendline-history-v2:${normalizeTicker(ticker)}`;
   const cached = await readCache(cacheKey);
-  const cachedPayload = cached?.payload as { lows?: unknown } | undefined;
+  const cachedPayload = cached?.payload as
+    | { lows?: unknown; dates?: unknown }
+    | undefined;
   const cachedLows = Array.isArray(cachedPayload?.lows)
     ? cachedPayload.lows as Array<number | null>
     : null;
-  if (isFresh(cached) && cachedLows && cachedLows.length >= 21) {
-    return { ticker, lows: cachedLows, source: "cache" as const };
+  const cachedDates = Array.isArray(cachedPayload?.dates)
+    ? cachedPayload.dates as Array<string | null>
+    : null;
+  if (
+    isFresh(cached) &&
+    cachedLows &&
+    cachedDates &&
+    cachedLows.length >= 21 &&
+    cachedDates.length === cachedLows.length
+  ) {
+    return { ticker, lows: cachedLows, dates: cachedDates, source: "cache" as const };
   }
 
   try {
@@ -479,18 +492,28 @@ async function getTickerTrendlineHistory(ticker: string, today: string) {
       1,
       6_000,
     );
-    const lows = parseYahooLows(payload, today);
-    if (lows.filter((low) => low !== null).length < 21) {
+    const history = parseYahooHistory(payload, today);
+    if (history.lows.filter((low) => low !== null).length < 21) {
       throw new Error("Yahoo Finance returnerte for få daglige kurser.");
     }
-    await writeCache(cacheKey, { lows }, TRENDLINE_HISTORY_TTL_SECONDS);
-    return { ticker, lows, source: "live" as const };
+    await writeCache(cacheKey, history, TRENDLINE_HISTORY_TTL_SECONDS);
+    return { ticker, ...history, source: "live" as const };
   } catch (error) {
-    if (cachedLows && cachedLows.length >= 21) {
-      return { ticker, lows: cachedLows, source: "stale-cache" as const };
+    if (
+      cachedLows &&
+      cachedDates &&
+      cachedLows.length >= 21 &&
+      cachedDates.length === cachedLows.length
+    ) {
+      return {
+        ticker,
+        lows: cachedLows,
+        dates: cachedDates,
+        source: "stale-cache" as const,
+      };
     }
     console.warn("Trendline history unavailable", ticker, errorMessage(error));
-    return { ticker, lows: null, source: "error" as const };
+    return { ticker, lows: null, dates: null, source: "error" as const };
   }
 }
 
@@ -528,9 +551,12 @@ async function getTrendlineHistory(
     (ticker) => getTickerTrendlineHistory(ticker, today),
   );
   const lowsByTicker: Record<string, Array<number | null>> = {};
+  const datesByTicker: Record<string, Array<string | null>> = {};
   for (const result of results) {
-    if (result.lows) {
-      lowsByTicker[normalizeTicker(result.ticker)] = result.lows;
+    if (result.lows && result.dates) {
+      const ticker = normalizeTicker(result.ticker);
+      lowsByTicker[ticker] = result.lows;
+      datesByTicker[ticker] = result.dates;
     }
   }
   const failed = results.filter((result) => result.lows === null).length;
@@ -541,6 +567,7 @@ async function getTrendlineHistory(
     : "cache";
   return {
     lowsByTicker,
+    datesByTicker,
     fetchedAt: new Date().toISOString(),
     source,
     warning: failed > 0

@@ -78,6 +78,11 @@ describe("parseMarketSnapshot", () => {
     const raw = rawSnapshot();
     raw.trendlineHistory = {
       lowsByTicker: { EQNR: Array.from({ length: 126 }, (_, index) => 400 + index) },
+      datesByTicker: {
+        EQNR: Array.from({ length: 126 }, (_, index) =>
+          new Date(Date.UTC(2026, 0, index + 1)).toISOString().slice(0, 10),
+        ),
+      },
       source: "live",
       warning: "Noen historiske kurser mangler.",
     };
@@ -87,6 +92,7 @@ describe("parseMarketSnapshot", () => {
 
     expect(equinor?.recentLows).toHaveLength(126);
     expect(equinor?.recentLows?.[0]).toBe(400);
+    expect(equinor?.recentLowDates?.[0]).toBe("2026-01-01");
     expect(snapshot.trendlineHistoryWarning).toContain("Noen historiske kurser");
   });
 

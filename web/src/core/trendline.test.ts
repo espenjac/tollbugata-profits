@@ -19,7 +19,7 @@ function makeStock(overrides: Partial<Stock> = {}): Stock {
     name: "Test ASA",
     close: 94,
     currency: "NOK",
-    weekReturn: 0.04,
+    weekReturn: -0.04,
     monthReturn: 0.1,
     quarterReturn: 0.18,
     sma5: 94,
@@ -75,6 +75,20 @@ describe("findTrendlineSetups", () => {
     expect(findTrendlineSetups([makeStock({ close: 85 })])).toEqual([]);
   });
 
+  it("does not call a rising-price setup approaching from above", () => {
+    expect(findTrendlineSetups([makeStock({ weekReturn: 0.04 })])).toEqual([]);
+  });
+
+  it("does not re-anchor a 6-month uptrend after the latest pivot made a lower low", () => {
+    const brokenRecentStructure = [...risingLows];
+    brokenRecentStructure[15] = 89;
+    const setup = findTrendlineSetups([
+      makeStock({ recentLows: [...historyPrefix, ...brokenRecentStructure] }),
+    ]);
+
+    expect(setup).toEqual([]);
+  });
+
   it("separates a price resting on the line from one that just bounced", () => {
     const base = findTrendlineSetups([makeStock()]).find(
       (item) => item.lookbackMonths === 3,
@@ -83,13 +97,13 @@ describe("findTrendlineSetups", () => {
     const atLine = findTrendlineSetups([
       makeStock({
         close: base!.supportPrice * 1.005,
-        low: base!.supportPrice * 0.99,
+        low: base!.supportPrice * 1.001,
       }),
     ]).find((item) => item.lookbackMonths === 3);
     const bounced = findTrendlineSetups([
       makeStock({
         close: base!.supportPrice * 1.03,
-        low: base!.supportPrice * 0.99,
+        low: base!.supportPrice * 1.001,
       }),
     ]).find((item) => item.lookbackMonths === 3);
 
@@ -100,6 +114,7 @@ describe("findTrendlineSetups", () => {
   it("keeps a weaker short-span trendline as a candidate", () => {
     const setup = findTrendlineSetups([
       makeStock({
+        close: 100,
         recentLows: [
           ...historyPrefix,
           93, 94, 95, 94, 92, 94, 95, 96, 95, 93,

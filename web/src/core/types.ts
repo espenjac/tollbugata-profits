@@ -41,6 +41,8 @@ export interface Stock {
   vwap: number | null;
   /** Completed-session lows, oldest first, from the recent scanner history. */
   recentLows?: Array<number | null>;
+  /** ISO session dates aligned with recentLows. */
+  recentLowDates?: Array<string | null>;
 }
 
 export function isGrowth(stock: Stock): boolean {
