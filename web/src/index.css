@@ -1261,6 +1261,28 @@ details.candidate-card[open] > summary::after {
   min-width: 12rem;
 }
 
+.trendline-table {
+  width: 100%;
+  min-width: 100%;
+  white-space: normal;
+  table-layout: auto;
+}
+
+.trendline-table th,
+.trendline-table td {
+  white-space: normal;
+}
+
+.trendline-table .num {
+  white-space: nowrap;
+}
+
+@media (min-width: 1400px) {
+  .app-main:has(.trendline-page) {
+    width: min(1800px, 100%);
+  }
+}
+
 .trendline-ticker {
   color: var(--text-strong);
   font-weight: 750;
