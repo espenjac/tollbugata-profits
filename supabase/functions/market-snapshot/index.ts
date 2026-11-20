@@ -26,7 +26,9 @@ const SCAN_TTL_SECONDS = 600;
 const OPEN_SCAN_TTL_SECONDS = 30;
 const NEWS_TTL_SECONDS = 300;
 const GROWTH_TTL_SECONDS = 24 * 60 * 60;
+const TRENDLINE_HISTORY_TTL_SECONDS = 15 * 60;
 const TRENDLINE_HISTORY_SESSIONS = 126;
+const TRENDLINE_HISTORY_CONCURRENCY = 8;
 
 const SCAN_COLUMNS = [
   "name",
@@ -61,10 +63,6 @@ const SCAN_COLUMNS = [
   "high[1]",
   "low",
   "VWAP",
-  ...Array.from(
-    { length: TRENDLINE_HISTORY_SESSIONS },
-    (_, index) => `low[${TRENDLINE_HISTORY_SESSIONS - index}]`,
-  ),
 ];
 
 const USER_AGENT =
@@ -370,6 +368,187 @@ async function getScan(
   }
 }
 
+function normalizeTicker(value: unknown): string {
+  return String(value ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function numberOrNull(value: unknown): number | null {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) && number > 0 ? number : null;
+}
+
+function trendlineHistoryTickers(
+  payload: Record<string, unknown> | undefined,
+  growthTickers: string[],
+): string[] {
+  const rows = Array.isArray(payload?.data) ? payload.data : [];
+  const growth = new Set(growthTickers.map(normalizeTicker));
+  const indexOf = (column: string) =>
+    SCAN_COLUMNS.indexOf(column as typeof SCAN_COLUMNS[number]);
+  const tickerIndex = indexOf("name");
+  const closeIndex = indexOf("close");
+  const averageVolumeIndex = indexOf("average_volume_10d_calc");
+  const atrIndex = indexOf("ATR");
+  const typeIndex = indexOf("type");
+  const tickers = new Set<string>();
+
+  for (const row of rows) {
+    const values = (row as { d?: unknown[] } | null)?.d;
+    if (!Array.isArray(values)) {
+      continue;
+    }
+    const ticker = String(values[tickerIndex] ?? "").trim();
+    const close = numberOrNull(values[closeIndex]);
+    const averageVolume = numberOrNull(values[averageVolumeIndex]);
+    const atr = numberOrNull(values[atrIndex]);
+    const type = String(values[typeIndex] ?? "");
+    if (
+      !ticker ||
+      growth.has(normalizeTicker(ticker)) ||
+      !["stock", "dr"].includes(type) ||
+      close === null ||
+      close < 5 ||
+      averageVolume === null ||
+      close * averageVolume < 3_000_000 ||
+      atr === null ||
+      atr / close < 0.015
+    ) {
+      continue;
+    }
+    tickers.add(ticker);
+  }
+  return [...tickers];
+}
+
+function parseYahooLows(
+  payload: Record<string, unknown>,
+  today: string,
+): Array<number | null> {
+  const chart = payload.chart as Record<string, unknown> | undefined;
+  const result = Array.isArray(chart?.result)
+    ? chart.result[0] as Record<string, unknown> | undefined
+    : undefined;
+  const timestamps = Array.isArray(result?.timestamp)
+    ? result.timestamp as unknown[]
+    : [];
+  const indicators = result?.indicators as Record<string, unknown> | undefined;
+  const quotes = Array.isArray(indicators?.quote)
+    ? indicators.quote[0] as Record<string, unknown> | undefined
+    : undefined;
+  const lows = Array.isArray(quotes?.low) ? quotes.low as unknown[] : [];
+  const history: Array<{ date: string; low: number | null }> = [];
+
+  for (let index = 0; index < Math.min(timestamps.length, lows.length); index += 1) {
+    const timestamp = numberOrNull(timestamps[index]);
+    if (timestamp === null) {
+      continue;
+    }
+    const date = osloDateString(new Date(timestamp * 1000));
+    if (date >= today) {
+      continue;
+    }
+    const low = numberOrNull(lows[index]);
+    if (low !== null) {
+      history.push({ date, low });
+    }
+  }
+  return history
+    .slice(-TRENDLINE_HISTORY_SESSIONS)
+    .map((item) => item.low);
+}
+
+async function getTickerTrendlineHistory(ticker: string, today: string) {
+  const cacheKey = `trendline-lows:${normalizeTicker(ticker)}`;
+  const cached = await readCache(cacheKey);
+  const cachedPayload = cached?.payload as { lows?: unknown } | undefined;
+  const cachedLows = Array.isArray(cachedPayload?.lows)
+    ? cachedPayload.lows as Array<number | null>
+    : null;
+  if (isFresh(cached) && cachedLows && cachedLows.length >= 21) {
+    return { ticker, lows: cachedLows, source: "cache" as const };
+  }
+
+  try {
+    const symbol = `${ticker}.OL`;
+    const url =
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}` +
+      "?range=1y&interval=1d&events=div%2Csplits";
+    const payload = await fetchJson(
+      url,
+      { headers: { "User-Agent": USER_AGENT } },
+      1,
+      6_000,
+    );
+    const lows = parseYahooLows(payload, today);
+    if (lows.filter((low) => low !== null).length < 21) {
+      throw new Error("Yahoo Finance returnerte for få daglige kurser.");
+    }
+    await writeCache(cacheKey, { lows }, TRENDLINE_HISTORY_TTL_SECONDS);
+    return { ticker, lows, source: "live" as const };
+  } catch (error) {
+    if (cachedLows && cachedLows.length >= 21) {
+      return { ticker, lows: cachedLows, source: "stale-cache" as const };
+    }
+    console.warn("Trendline history unavailable", ticker, errorMessage(error));
+    return { ticker, lows: null, source: "error" as const };
+  }
+}
+
+async function mapConcurrent<T, R>(
+  values: T[],
+  concurrency: number,
+  callback: (value: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(values.length);
+  let nextIndex = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+      while (true) {
+        const index = nextIndex;
+        nextIndex += 1;
+        if (index >= values.length) {
+          return;
+        }
+        results[index] = await callback(values[index]);
+      }
+    }),
+  );
+  return results;
+}
+
+async function getTrendlineHistory(
+  scanPayload: Record<string, unknown> | undefined,
+  growthTickers: string[],
+) {
+  const today = osloDateString(new Date());
+  const tickers = trendlineHistoryTickers(scanPayload, growthTickers);
+  const results = await mapConcurrent(
+    tickers,
+    TRENDLINE_HISTORY_CONCURRENCY,
+    (ticker) => getTickerTrendlineHistory(ticker, today),
+  );
+  const lowsByTicker: Record<string, Array<number | null>> = {};
+  for (const result of results) {
+    if (result.lows) {
+      lowsByTicker[normalizeTicker(result.ticker)] = result.lows;
+    }
+  }
+  const failed = results.filter((result) => result.lows === null).length;
+  const source = results.some((result) => result.source === "stale-cache")
+    ? "stale-cache"
+    : results.some((result) => result.source === "live")
+    ? "live"
+    : "cache";
+  return {
+    lowsByTicker,
+    fetchedAt: new Date().toISOString(),
+    source,
+    warning: failed > 0
+      ? `Historiske kurser mangler for ${failed} av ${tickers.length} aktuelle aksjer.`
+      : null,
+  };
+}
+
 function normalizeBenchmark(
   payload: Record<string, unknown> | null | undefined,
 ): BenchmarkPayload | null {
@@ -666,17 +845,22 @@ serve(async (request) => {
     const [scan, growth, news, benchmark] = await Promise.all([
       // Version the cache key when the scanner column order changes so cached
       // rows from the previous schema cannot be parsed with shifted indexes.
-      getScan("scan-v3", scanTtl),
+      getScan("scan-v4", scanTtl),
       getGrowth(),
       getNews(),
       getBenchmark(scanTtl),
     ]);
+    const trendlineHistory = await getTrendlineHistory(
+      scan.payload as Record<string, unknown> | undefined,
+      growth.tickers,
+    );
     return json({
       generatedAt: new Date().toISOString(),
       scan,
       growth,
       news,
       benchmark,
+      trendlineHistory,
     });
   } catch (error) {
     console.error("market-snapshot failed", error);

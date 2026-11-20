@@ -1,4 +1,4 @@
-import { parseScannerPayload } from "./market";
+import { normalizeTicker, parseScannerPayload } from "./market";
 import { emptyNewsFeed, parseNewsPayload, type NewsFeed } from "./news";
 import type { Universe } from "./types";
 
@@ -22,6 +22,7 @@ export interface RawSnapshot {
   growth?: RawSnapshotSource<unknown>;
   news?: RawSnapshotSource<unknown>;
   benchmark?: RawBenchmark;
+  trendlineHistory?: RawTrendlineHistory;
   error?: string;
 }
 
@@ -30,6 +31,13 @@ export interface RawBenchmark {
   name?: string;
   value?: number | null;
   changePct?: number | null;
+  fetchedAt?: string;
+  source?: string;
+  warning?: string | null;
+}
+
+export interface RawTrendlineHistory {
+  lowsByTicker?: Record<string, unknown>;
   fetchedAt?: string;
   source?: string;
   warning?: string | null;
@@ -50,6 +58,7 @@ export interface MarketSnapshot {
   news: NewsFeed;
   benchmark: MarketBenchmark | null;
   generatedAt: Date;
+  trendlineHistoryWarning?: string | null;
 }
 
 function sourceValue(
@@ -129,6 +138,23 @@ export function parseMarketSnapshot(
     throw new Error("TradingView returnerte ingen aksjer for Oslo Børs.");
   }
 
+  const lowsByTicker = data.trendlineHistory?.lowsByTicker ?? {};
+  const normalizedHistory = new Map(
+    Object.entries(lowsByTicker).map(([ticker, lows]) => [
+      normalizeTicker(ticker),
+      lows,
+    ]),
+  );
+  for (const stock of stocks) {
+    const history = normalizedHistory.get(normalizeTicker(stock.ticker));
+    if (Array.isArray(history)) {
+      stock.recentLows = history.map((low) => {
+        const value = typeof low === "number" ? low : Number(low);
+        return Number.isFinite(value) && value > 0 ? value : null;
+      });
+    }
+  }
+
   const newsFetchedAt = data.news?.fetchedAt
     ? new Date(data.news.fetchedAt)
     : now;
@@ -170,5 +196,6 @@ export function parseMarketSnapshot(
     news,
     benchmark: parseBenchmark(data.benchmark, now),
     generatedAt: data.generatedAt ? new Date(data.generatedAt) : now,
+    trendlineHistoryWarning: data.trendlineHistory?.warning ?? null,
   };
 }

@@ -74,6 +74,22 @@ describe("parseMarketSnapshot", () => {
     expect(parseMarketSnapshot(zero).benchmark).toBeNull();
   });
 
+  it("attaches cached daily lows from the history source to normalized stocks", () => {
+    const raw = rawSnapshot();
+    raw.trendlineHistory = {
+      lowsByTicker: { EQNR: Array.from({ length: 126 }, (_, index) => 400 + index) },
+      source: "live",
+      warning: "Noen historiske kurser mangler.",
+    };
+
+    const snapshot = parseMarketSnapshot(raw);
+    const equinor = snapshot.universe.stocks.find((stock) => stock.ticker === "EQNR");
+
+    expect(equinor?.recentLows).toHaveLength(126);
+    expect(equinor?.recentLows?.[0]).toBe(400);
+    expect(snapshot.trendlineHistoryWarning).toContain("Noen historiske kurser");
+  });
+
   it("falls back to an empty news feed when NewsWeb is unusable", () => {
     const raw = rawSnapshot();
     raw.news = { payload: {}, source: "error", warning: "NewsWeb nede" };

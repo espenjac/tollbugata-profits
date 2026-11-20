@@ -2,6 +2,7 @@ import { atrPct, averageTurnover, type Stock } from "./types";
 
 /** Trendline scanner settings are deliberately conservative and not optimized. */
 export const TRENDLINE_LOOKBACKS = [
+  { months: 1, sessions: 21 },
   { months: 3, sessions: 63 },
   { months: 6, sessions: 126 },
 ] as const;
@@ -25,7 +26,7 @@ interface Pivot {
 
 export interface TrendlineSetup {
   stock: Stock;
-  lookbackMonths: 3 | 6;
+  lookbackMonths: 1 | 3 | 6;
   phase: TrendlinePhase;
   quality: "stronger" | "weaker";
   supportPrice: number;
@@ -41,20 +42,32 @@ export type TrendlinePhase = "approaching" | "bounced" | "on_line";
 
 function classifyPhase(
   stock: Stock,
-  supportPrice: number,
   distancePct: number,
   volatilityPct: number,
+  lows: Array<number | null>,
+  supportAt: (index: number) => number,
 ): TrendlinePhase | null {
-  const low = stock.low;
-  if (isPositive(low)) {
-    const lowDistancePct = low / supportPrice - 1;
-    const recoveryPct = (stock.close - low) / stock.close;
+  const currentIndex = lows.length - 1;
+  const recentlyTouched = lows
+    .slice(-4)
+    .some((low, offset, recentLows) => {
+      if (!isPositive(low)) {
+        return false;
+      }
+      const index = currentIndex - recentLows.length + 1 + offset;
+      const line = supportAt(index);
+      const lowDistancePct = low / line - 1;
+      const recoveryPct = (stock.close - low) / stock.close;
+      return (
+        lowDistancePct >= -volatilityPct * TRENDLINE_BOUNCE_TOUCH_ATR &&
+        lowDistancePct <= volatilityPct * TRENDLINE_BOUNCE_TOUCH_ATR &&
+        recoveryPct >= volatilityPct * TRENDLINE_BOUNCE_RECOVERY_ATR
+      );
+    });
+  if (recentlyTouched) {
     if (
-      lowDistancePct >= -volatilityPct * TRENDLINE_BOUNCE_TOUCH_ATR &&
-      lowDistancePct <= volatilityPct * TRENDLINE_BOUNCE_TOUCH_ATR &&
       distancePct > volatilityPct * TRENDLINE_ON_LINE_ATR &&
-      distancePct <= volatilityPct * TRENDLINE_BOUNCE_MAX_DISTANCE_ATR &&
-      recoveryPct >= volatilityPct * TRENDLINE_BOUNCE_RECOVERY_ATR
+      distancePct <= volatilityPct * TRENDLINE_BOUNCE_MAX_DISTANCE_ATR
     ) {
       return "bounced";
     }
@@ -82,12 +95,18 @@ function isPositive(value: number | null | undefined): value is number {
 function pivots(lows: Array<number | null>): Pivot[] {
   const found: Pivot[] = [];
   const radius = TRENDLINE_PIVOT_RADIUS;
-  for (let index = radius; index < lows.length - radius; index += 1) {
+  // Allow the first/last point of a lookback to become a pivot when it has at
+  // least one observation on both sides. This catches recent tests without
+  // waiting two extra sessions for a fully centered pivot window.
+  for (let index = 1; index < lows.length - 1; index += 1) {
     const price = lows[index];
     if (!isPositive(price)) {
       continue;
     }
-    const neighbors = lows.slice(index - radius, index + radius + 1);
+    const neighbors = lows.slice(
+      Math.max(0, index - radius),
+      Math.min(lows.length, index + radius + 1),
+    );
     const valid = neighbors.every(isPositive);
     if (
       valid &&
@@ -124,11 +143,12 @@ function setupFor(
     return null;
   }
 
-  const lowsWithIndex = lows.map((price, index) => ({ price, index }));
+  const points = [...lows, isPositive(stock.low) ? stock.low : null];
+  const lowsWithIndex = points.map((price, index) => ({ price, index }));
   const validLows = lowsWithIndex.filter(
     (point): point is { price: number; index: number } => isPositive(point.price),
   );
-  const turningPoints = pivots(lows);
+  const turningPoints = pivots(points);
   if (validLows.length < 10 || turningPoints.length < 2) {
     return null;
   }
@@ -157,9 +177,16 @@ function setupFor(
       const touches = turningPoints.filter(
         (point) => Math.abs(point.price - valueAt(point.index)) <= tolerance,
       ).length;
-      const supportPrice = valueAt(lows.length);
+      const currentIndex = points.length - 1;
+      const supportPrice = valueAt(currentIndex);
       const distancePct = stock.close / supportPrice - 1;
-      const phase = classifyPhase(stock, supportPrice, distancePct, volatilityPct);
+      const phase = classifyPhase(
+        stock,
+        distancePct,
+        volatilityPct,
+        points,
+        valueAt,
+      );
       if (phase === null) {
         continue;
       }
@@ -196,7 +223,7 @@ function setupFor(
   return possible.sort((left, right) => right.score - left.score)[0] ?? null;
 }
 
-/** Finds liquid, higher-volatility Oslo shares approaching rising 3- or 6-month support lines. */
+/** Finds liquid, higher-volatility Oslo shares approaching rising 1-, 3-, or 6-month support lines. */
 export function findTrendlineSetups(stocks: Iterable<Stock>): TrendlineSetup[] {
   const setups: TrendlineSetup[] = [];
   for (const stock of stocks) {

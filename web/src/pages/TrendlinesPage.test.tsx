@@ -56,7 +56,7 @@ function makeStock(): Stock {
     open: 93,
     high: 95,
     previousDayHigh: 94,
-    low: 91.5,
+    low: null,
     vwap: 94,
     recentLows: longHistory,
   };
@@ -95,7 +95,8 @@ describe("TrendlinesPage", () => {
     const text = container.textContent ?? "";
 
     expect(text).toContain("Trendlinjer");
-    expect(text).toContain("Nærmer seg trendlinjen (2)");
+    expect(text).toContain("Trendlinjeoppsett (3)");
+    expect(text).toContain("Nærmer seg trendlinjen (3)");
     expect(text).toContain("Nylig sprett på trendlinjen (0)");
     expect(text).toContain("På trendlinjen (0)");
     expect(text).toContain("TEST");

@@ -8,6 +8,10 @@ const risingLows = [
 ];
 const historyPrefix = Array.from({ length: 106 }, (_, index) => 68 + index * 0.2);
 const sixMonthHistory = [...historyPrefix, ...risingLows];
+const eloMonthlyLows = [
+  33.75, 33, 33, 34.9, 34.1, 34.05, 34.05, 33.7, 34.05, 34.5,
+  35.3, 34.5, 34.7, 35.2, 36.1, 36.35, 36.6, 36.85, 36.8, 36.45, 36.45,
+];
 
 function makeStock(overrides: Partial<Stock> = {}): Stock {
   return {
@@ -37,7 +41,7 @@ function makeStock(overrides: Partial<Stock> = {}): Stock {
     open: 93,
     high: 95,
     previousDayHigh: 94,
-    low: 91.5,
+    low: null,
     vwap: 94,
     recentLows: sixMonthHistory,
     ...overrides,
@@ -51,6 +55,7 @@ describe("findTrendlineSetups", () => {
 
     expect(setup?.stock.ticker).toBe("TEST");
     expect(setups.map((item) => item.lookbackMonths)).toContain(6);
+    expect(setups.map((item) => item.lookbackMonths)).toContain(1);
     expect(setup?.phase).toBe("approaching");
     expect(setup?.touches).toBeGreaterThanOrEqual(2);
     expect(setup?.lineRisePct).toBeGreaterThan(0);
@@ -105,6 +110,25 @@ describe("findTrendlineSetups", () => {
 
     expect(setup?.anchorGap).toBeLessThan(8);
     expect(setup?.quality).toBe("weaker");
+  });
+
+  it("detects ELO-style month-long support and a recent bounce at the window edge", () => {
+    const setup = findTrendlineSetups([
+      makeStock({
+        ticker: "ELO",
+        name: "Elopak ASA",
+        close: 37.6,
+        atr: 0.8746,
+        averageVolume10d: 238_190,
+        recentLows: eloMonthlyLows,
+        low: 37.35,
+      }),
+    ]).find((item) => item.lookbackMonths === 1);
+
+    expect(setup).toBeDefined();
+    expect(setup?.phase).toBe("bounced");
+    expect(setup?.supportPrice).toBeGreaterThan(36);
+    expect(setup?.supportPrice).toBeLessThan(37.5);
   });
 
   it("does not label short history as a 3- or 6-month setup", () => {

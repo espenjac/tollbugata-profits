@@ -2,7 +2,6 @@ import { osloDateString } from "./dates";
 import type { Stock } from "./types";
 
 export const SCANNER_URL = "https://scanner.tradingview.com/norway/scan";
-export const TRENDLINE_HISTORY_SESSIONS = 126;
 
 export const SCANNER_COLUMNS = [
   "name",
@@ -37,10 +36,6 @@ export const SCANNER_COLUMNS = [
   "high[1]",
   "low",
   "VWAP",
-  ...Array.from(
-    { length: TRENDLINE_HISTORY_SESSIONS },
-    (_, index) => `low[${TRENDLINE_HISTORY_SESSIONS - index}]`,
-  ),
 ] as const;
 
 export class MarketDataError extends Error {
@@ -169,12 +164,6 @@ export function parseScannerPayload(
       previousDayHigh: numberValue(values.get("high[1]")),
       low: numberValue(values.get("low")),
       vwap: numberValue(values.get("VWAP")),
-      recentLows: Array.from({ length: TRENDLINE_HISTORY_SESSIONS }, (_, index) => {
-        const value = numberValue(
-          values.get(`low[${TRENDLINE_HISTORY_SESSIONS - index}]`),
-        );
-        return value !== null && value > 0 ? value : null;
-      }),
     });
   }
 

@@ -62,7 +62,7 @@ export function TrendlinesPage() {
     <div className="page trendline-page">
       <section className="hero">
         <div className="hero-copy">
-          <p className="eyebrow">Oslo Børs · positiv støtte · 3 og 6 måneder</p>
+          <p className="eyebrow">Oslo Børs · positiv støtte · 1, 3 og 6 måneder</p>
           <h1>Trendlinjer</h1>
           <p>
             En ekstra long-only skanner for aksjer som nærmer seg en stigende
@@ -97,9 +97,11 @@ export function TrendlinesPage() {
       ) : null}
       {historyCount === 0 ? (
         <InlineNotice kind="warning">
-          Historiske dagsbunner mangler. Oppdater/deploy `market-snapshot`-funksjonen
-          med trendlinjekolonnene før skanneren kan analysere oppsett.
+          {snapshot?.trendlineHistoryWarning ??
+            "Historiske dagsbunner mangler fra datakilden. Prøv å oppdatere skanneren senere."}
         </InlineNotice>
+      ) : snapshot?.trendlineHistoryWarning ? (
+        <InlineNotice kind="warning">{snapshot.trendlineHistoryWarning}</InlineNotice>
       ) : null}
 
       <section className="panel trendline-panel" aria-label="Trendlinjekandidater">

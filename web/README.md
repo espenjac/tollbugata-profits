@@ -66,10 +66,11 @@ npm run preview    # forhåndsvis produksjonsbygget
   bruker `src/lib/useEtrade.ts`, som alltid henter et ferskt snapshot og aldri
   lagrer ideene som en dagsrapport.
 - `src/pages/TrendlinesPage.tsx` er `/trendlinjer`, en ekstra long-only
-  observasjonsliste for aksjer nær stigende støttelinjer fra de siste 20
-  handelssesjonene. Den krever historiske dagsbunner, minst 1,5 % ATR og
-  3 mill. kr i snittomsetning; ATR og månedlig avkastning vises for å synliggjøre
-  volatilitet. `market-snapshot` må deployes med de utvidede scanner-kolonnene.
+  observasjonsliste for aksjer nær stigende støttelinjer fra de siste 1, 3 og 6
+  månedene. Daglige historiske bunner hentes server-side fra Yahoo Finance og
+  caches per ticker; de er ikke tilgjengelige fra TradingView-scannerens
+  historikkolonner. Skanneren krever minst 1,5 % ATR og 3 mill. kr i
+  snittomsetning, og merker svakere tekniske oppsett.
 - `src/pages/JournalPage.tsx` er `/logg`. Den henter bare Supabase-data og
   kontakter aldri markeds-API-ene. Åpne posisjoner viser gevinstmål og stop
   regnet fra faktisk snittkost, antall handledager og tidsstopp etter 5 dager.
