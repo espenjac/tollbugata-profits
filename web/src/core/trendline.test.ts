@@ -8,6 +8,12 @@ const risingLows = [
 ];
 const historyPrefix = Array.from({ length: 106 }, (_, index) => 68 + index * 0.2);
 const sixMonthHistory = [...historyPrefix, ...risingLows];
+const highPrefix = Array.from({ length: 105 }, (_, index) => 95 + index * 0.2);
+const risingHighs = [
+  100, 101, 102, 103, 110, 104, 105, 106, 107, 112, 108,
+  109, 110, 111, 115, 112, 113, 114, 116, 118, 117,
+];
+const sixMonthHighs = [...highPrefix, ...risingHighs];
 const eloMonthlyLows = [
   33.75, 33, 33, 34.9, 34.1, 34.05, 34.05, 33.7, 34.05, 34.5,
   35.3, 34.5, 34.7, 35.2, 36.1, 36.35, 36.6, 36.85, 36.8, 36.45, 36.45,
@@ -144,6 +150,26 @@ describe("findTrendlineSetups", () => {
     expect(setup?.phase).toBe("bounced");
     expect(setup?.supportPrice).toBeGreaterThan(36);
     expect(setup?.supportPrice).toBeLessThan(37.5);
+  });
+
+  it("estimates a channel target only when recent swing highs are rising", () => {
+    const setup = findTrendlineSetups([
+      makeStock({ recentHighs: sixMonthHighs }),
+    ]).find((item) => item.lookbackMonths === 1);
+
+    expect(setup?.higherHighs).toBe(true);
+    expect(setup?.channelWidth).toBeGreaterThan(0);
+    expect(setup?.channelTarget).toBeGreaterThan(setup!.stock.close);
+  });
+
+  it("does not manufacture a channel target when high history is missing", () => {
+    const setup = findTrendlineSetups([makeStock()]).find(
+      (item) => item.lookbackMonths === 1,
+    );
+
+    expect(setup?.higherHighs).toBeNull();
+    expect(setup?.channelWidth).toBeNull();
+    expect(setup?.channelTarget).toBeNull();
   });
 
   it("does not label short history as a 3- or 6-month setup", () => {

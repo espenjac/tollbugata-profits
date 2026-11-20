@@ -38,6 +38,7 @@ export interface RawBenchmark {
 
 export interface RawTrendlineHistory {
   lowsByTicker?: Record<string, unknown>;
+  highsByTicker?: Record<string, unknown>;
   datesByTicker?: Record<string, unknown>;
   fetchedAt?: string;
   source?: string;
@@ -140,6 +141,7 @@ export function parseMarketSnapshot(
   }
 
   const lowsByTicker = data.trendlineHistory?.lowsByTicker ?? {};
+  const highsByTicker = data.trendlineHistory?.highsByTicker ?? {};
   const datesByTicker = data.trendlineHistory?.datesByTicker ?? {};
   const normalizedHistory = new Map(
     Object.entries(lowsByTicker).map(([ticker, lows]) => [
@@ -153,12 +155,25 @@ export function parseMarketSnapshot(
       dates,
     ]),
   );
+  const normalizedHighs = new Map(
+    Object.entries(highsByTicker).map(([ticker, highs]) => [
+      normalizeTicker(ticker),
+      highs,
+    ]),
+  );
   for (const stock of stocks) {
     const key = normalizeTicker(stock.ticker);
     const history = normalizedHistory.get(key);
     if (Array.isArray(history)) {
       stock.recentLows = history.map((low) => {
         const value = typeof low === "number" ? low : Number(low);
+        return Number.isFinite(value) && value > 0 ? value : null;
+      });
+    }
+    const highs = normalizedHighs.get(key);
+    if (Array.isArray(highs)) {
+      stock.recentHighs = highs.map((high) => {
+        const value = typeof high === "number" ? high : Number(high);
         return Number.isFinite(value) && value > 0 ? value : null;
       });
     }

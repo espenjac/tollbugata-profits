@@ -29,6 +29,9 @@ export interface TrendlineSetup {
   phase: TrendlinePhase;
   quality: "stronger" | "weaker";
   supportPrice: number;
+  channelTarget: number | null;
+  channelWidth: number | null;
+  higherHighs: boolean | null;
   anchorStartDate: string | null;
   anchorEndDate: string | null;
   distancePct: number;
@@ -102,32 +105,41 @@ function isPositive(value: number | null | undefined): value is number {
   return value !== null && value !== undefined && Number.isFinite(value) && value > 0;
 }
 
-function pivots(lows: Array<number | null>): Pivot[] {
+function pivots(
+  values: Array<number | null>,
+  kind: "low" | "high" = "low",
+): Pivot[] {
   const found: Pivot[] = [];
   const radius = TRENDLINE_PIVOT_RADIUS;
   // Allow the first/last point of a lookback to become a pivot when it has at
   // least one observation on both sides. This catches recent tests without
   // waiting two extra sessions for a fully centered pivot window.
-  for (let index = 1; index < lows.length - 1; index += 1) {
-    const price = lows[index];
+  for (let index = 1; index < values.length - 1; index += 1) {
+    const price = values[index];
     if (!isPositive(price)) {
       continue;
     }
-    const neighbors = lows.slice(
+    const rawNeighbors = values.slice(
       Math.max(0, index - radius),
-      Math.min(lows.length, index + radius + 1),
+      Math.min(values.length, index + radius + 1),
     );
-    const valid = neighbors.every(isPositive);
+    const neighbors = rawNeighbors.filter(isPositive);
+    if (neighbors.length !== rawNeighbors.length) {
+      continue;
+    }
+    const isExtreme = kind === "low"
+      ? neighbors.every((value) => price <= value) &&
+        neighbors.some((value) => price < value)
+      : neighbors.every((value) => price >= value) &&
+        neighbors.some((value) => price > value);
     if (
-      valid &&
-      neighbors.every((value) => price <= value) &&
-      neighbors.some((value) => price < value)
+      isExtreme
     ) {
       const previous = found.at(-1);
-      const equalLow = previous &&
+      const equalExtreme = previous &&
         Math.abs(previous.price - price) <= Math.max(price, previous.price) * 1e-6;
-      if (equalLow && index - previous.index <= radius * 2) {
-        // Treat a flat-bottom cluster as one pivot, anchored at its last bar.
+      if (equalExtreme && index - previous.index <= radius * 2) {
+        // Treat a flat extreme as one pivot, anchored at its last bar.
         found[found.length - 1] = { index, price };
       } else {
         found.push({ index, price });
@@ -135,6 +147,17 @@ function pivots(lows: Array<number | null>): Pivot[] {
     }
   }
   return found;
+}
+
+function median(values: number[]): number | null {
+  if (values.length === 0) {
+    return null;
+  }
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[middle - 1] + sorted[middle]) / 2
+    : sorted[middle];
 }
 
 function setupFor(
@@ -146,6 +169,10 @@ function setupFor(
     ? history.slice(-lookback.sessions)
     : null;
   const dates = stock.recentLowDates?.slice(-lookback.sessions) ?? [];
+  const historyHighs = stock.recentHighs;
+  const highs = historyHighs && historyHighs.length >= lookback.sessions
+    ? historyHighs.slice(-lookback.sessions)
+    : null;
   const volatilityPct = atrPct(stock);
   const turnover = averageTurnover(stock);
   if (
@@ -167,7 +194,16 @@ function setupFor(
   const validLows = lowsWithIndex.filter(
     (point): point is { price: number; index: number } => isPositive(point.price),
   );
-  const turningPoints = pivots(points);
+  const turningPoints = pivots(points, "low");
+  const highPoints = highs
+    ? [...highs, isPositive(stock.high) ? stock.high : null]
+    : null;
+  const highTurningPoints = highPoints ? pivots(highPoints, "high") : [];
+  const latestHighPivots = highTurningPoints.slice(-3);
+  const higherHighs = latestHighPivots.length < 3
+    ? null
+    : latestHighPivots[2].price > latestHighPivots[1].price &&
+      latestHighPivots[1].price > latestHighPivots[0].price;
   if (validLows.length < 10 || turningPoints.length < 2) {
     return null;
   }
@@ -215,6 +251,20 @@ function setupFor(
       ).length;
       const currentIndex = points.length - 1;
       const supportPrice = valueAt(currentIndex);
+      const channelOffsets = highTurningPoints
+        .filter((point) => point.index >= older.index && point.index < lows.length)
+        .map((point) => point.price - valueAt(point.index))
+        .filter((offset) => offset > 0);
+      const channelWidth = higherHighs === true && channelOffsets.length >= 2
+        ? median(channelOffsets)
+        : null;
+      const estimatedChannelTarget = channelWidth === null
+        ? null
+        : supportPrice + channelWidth;
+      const channelTarget = estimatedChannelTarget !== null &&
+          estimatedChannelTarget > stock.close
+        ? estimatedChannelTarget
+        : null;
       const distancePct = stock.close / supportPrice - 1;
       const phase = classifyPhase(
         stock,
@@ -247,6 +297,9 @@ function setupFor(
         phase,
         quality,
         supportPrice,
+        channelTarget,
+        channelWidth,
+        higherHighs,
         anchorStartDate: dates[older.index] ?? null,
         anchorEndDate: dates[newer.index] ?? null,
         distancePct,

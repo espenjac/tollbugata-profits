@@ -115,7 +115,9 @@ export function TrendlinesPage() {
               fra en stigende støttelinje. Krever minst to stigende svingbunner,
               Nå vises også svakere mønstre; disse merkes i listen. Aksjer må
               fortsatt ha dags-ATR på minst 1,5 % og snittomsetning på minst
-              3 mill. kr.
+              3 mill. kr. Kanal-målet er et estimat fra medianavstanden mellom
+              støttelinjen og tidligere svingtopper; det vises bare når toppene
+              stiger.
             </p>
           </div>
         </div>
@@ -184,6 +186,8 @@ function TrendlineGroup({
                 <th>Oppsett</th>
                 <th className="num">Kurs</th>
                 <th className="num">Trendlinje</th>
+                <th className="num">Topper stiger</th>
+                <th className="num">Målområde</th>
                 <th className="num">Avstand</th>
                 <th className="num">ATR/dag</th>
                 <th className="num">1 mnd.</th>
@@ -210,6 +214,16 @@ function TrendlineGroup({
                   <td>{setup.quality === "stronger" ? "Sterkere" : "Svakere"}</td>
                   <td className="num">{formatPrice(setup.stock.close)} kr</td>
                   <td className="num">{formatPrice(setup.supportPrice)} kr</td>
+                  <td className="num">
+                    {setup.higherHighs === null
+                      ? "For få data"
+                      : setup.higherHighs ? "Ja" : "Nei"}
+                  </td>
+                  <td className="num">
+                    {setup.channelTarget === null
+                      ? "–"
+                      : `${formatPrice(setup.channelTarget)} kr`}
+                  </td>
                   <td className="num">{formatPercent(setup.distancePct)}</td>
                   <td className="num">{formatPercent(atrPct(setup.stock))}</td>
                   <td className="num">{formatPercent(setup.stock.monthReturn)}</td>
