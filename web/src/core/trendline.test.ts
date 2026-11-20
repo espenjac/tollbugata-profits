@@ -160,6 +160,8 @@ describe("findTrendlineSetups", () => {
     expect(setup?.higherHighs).toBe(true);
     expect(setup?.channelWidth).toBeGreaterThan(0);
     expect(setup?.channelTarget).toBeGreaterThan(setup!.stock.close);
+    expect(setup?.completedTopCycles).toBeGreaterThanOrEqual(2);
+    expect(setup?.averageSessionsToSwingHigh).toBeGreaterThan(0);
   });
 
   it("does not manufacture a channel target when high history is missing", () => {

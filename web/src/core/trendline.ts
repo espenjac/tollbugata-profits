@@ -32,6 +32,8 @@ export interface TrendlineSetup {
   channelTarget: number | null;
   channelWidth: number | null;
   higherHighs: boolean | null;
+  averageSessionsToSwingHigh: number | null;
+  completedTopCycles: number;
   anchorStartDate: string | null;
   anchorEndDate: string | null;
   distancePct: number;
@@ -265,6 +267,28 @@ function setupFor(
           estimatedChannelTarget > stock.close
         ? estimatedChannelTarget
         : null;
+      const supportTouches = turningPoints.filter(
+        (point) =>
+          point.index < lows.length &&
+          Math.abs(point.price - valueAt(point.index)) <= tolerance,
+      );
+      const topDurations: number[] = [];
+      for (let touchIndex = 0; touchIndex < supportTouches.length; touchIndex += 1) {
+        const touch = supportTouches[touchIndex];
+        const nextTouchIndex = supportTouches[touchIndex + 1]?.index ?? lows.length;
+        const nextTop = highTurningPoints.find(
+          (point) =>
+            point.index > touch.index &&
+            point.index < nextTouchIndex &&
+            point.index < lows.length,
+        );
+        if (nextTop) {
+          topDurations.push(nextTop.index - touch.index);
+        }
+      }
+      const averageSessionsToSwingHigh = topDurations.length >= 2
+        ? topDurations.reduce((total, days) => total + days, 0) / topDurations.length
+        : null;
       const distancePct = stock.close / supportPrice - 1;
       const phase = classifyPhase(
         stock,
@@ -300,6 +324,8 @@ function setupFor(
         channelTarget,
         channelWidth,
         higherHighs,
+        averageSessionsToSwingHigh,
+        completedTopCycles: topDurations.length,
         anchorStartDate: dates[older.index] ?? null,
         anchorEndDate: dates[newer.index] ?? null,
         distancePct,

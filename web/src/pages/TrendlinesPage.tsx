@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ErrorPanel, InlineNotice, LoadingView } from "../components/ui";
-import { formatDate, formatDateTime } from "../core/format";
+import { formatDate, formatDateTime, formatNumber } from "../core/format";
 import {
   findTrendlineSetups,
   type TrendlinePhase,
@@ -189,6 +189,7 @@ function TrendlineGroup({
                 <th className="num">Topper stiger</th>
                 <th className="num">Målområde</th>
                 <th className="num">Oppside til mål</th>
+                <th className="num">Snitt til topp</th>
                 <th className="num">Avstand</th>
                 <th className="num">ATR/dag</th>
                 <th className="num">1 mnd.</th>
@@ -229,6 +230,11 @@ function TrendlineGroup({
                     {setup.channelTarget === null
                       ? "–"
                       : formatPercent(setup.channelTarget / setup.stock.close - 1)}
+                  </td>
+                  <td className="num">
+                    {setup.averageSessionsToSwingHigh === null
+                      ? `For lite data (${setup.completedTopCycles})`
+                      : `${formatNumber(setup.averageSessionsToSwingHigh, 1)} handledager (n=${setup.completedTopCycles})`}
                   </td>
                   <td className="num">{formatPercent(setup.distancePct)}</td>
                   <td className="num">{formatPercent(atrPct(setup.stock))}</td>
