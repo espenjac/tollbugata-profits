@@ -2,6 +2,7 @@
 import { fireEvent, render, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { MarketSnapshot } from "../core/snapshot";
+import { findTrendlineSetups } from "../core/trendline";
 import type { Stock } from "../core/types";
 import { TrendlinesPage } from "./TrendlinesPage";
 
@@ -26,6 +27,11 @@ const recentLows = [
 const longHistory = [
   ...Array.from({ length: 106 }, (_, index) => 68 + index * 0.2),
   ...recentLows,
+];
+const highHistory = [
+  ...Array.from({ length: 105 }, (_, index) => 95 + index * 0.2),
+  100, 101, 102, 103, 110, 104, 105, 106, 107, 112, 108,
+  109, 110, 111, 115, 112, 113, 114, 116, 118, 117,
 ];
 
 function makeStock(): Stock {
@@ -113,6 +119,25 @@ describe("TrendlinesPage", () => {
 
     expect(text).toContain("Historiske dagsbunner mangler");
     expect(text).toContain("Mangler historikk");
+  });
+
+  it("shows percent upside from the current price to the channel target", () => {
+    const stock = { ...makeStock(), recentHighs: highHistory };
+    const setup = findTrendlineSetups([stock]).find(
+      (item) => item.lookbackMonths === 1,
+    );
+    expect(setup?.channelTarget).not.toBeNull();
+    mockState.snapshot = snapshot([stock]);
+    const { container } = render(<TrendlinesPage />);
+    const group = within(
+      container.querySelector('[aria-label="Nærmer seg trendlinjen"]')!,
+    );
+    const row = group.getAllByRole("row")[1] as HTMLTableRowElement;
+    const expected = `${(((setup!.channelTarget! / stock.close) - 1) * 100)
+      .toFixed(1).replace(".", ",")} %`;
+
+    expect(group.getByText("Oppside til mål")).toBeTruthy();
+    expect(row.cells[8].textContent).toContain(expected);
   });
 
   it("shows the five highest-scoring setups per category before expanding", () => {
