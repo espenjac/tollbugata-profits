@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ErrorPanel, InlineNotice, LoadingView } from "../components/ui";
 import { formatDateTime } from "../core/format";
 import {
@@ -159,6 +160,9 @@ function TrendlineGroup({
   explanation: string;
   setups: TrendlineSetup[];
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const visibleSetups = expanded ? setups : setups.slice(0, 5);
+
   return (
     <section className={`trendline-group trendline-group-${phase}`} aria-label={title}>
       <div className="trendline-group-heading">
@@ -187,7 +191,7 @@ function TrendlineGroup({
               </tr>
             </thead>
             <tbody>
-              {setups.map((setup) => (
+              {visibleSetups.map((setup) => (
                 <tr key={`${setup.stock.ticker}-${setup.lookbackMonths}`}>
                   <td>
                     <a
@@ -215,6 +219,16 @@ function TrendlineGroup({
           </table>
         </div>
       )}
+      {setups.length > 5 ? (
+        <button
+          className="btn btn-ghost trendline-expand"
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((current) => !current)}
+        >
+          {expanded ? "Vis færre" : `Vis alle ${setups.length} oppsett`}
+        </button>
+      ) : null}
     </section>
   );
 }

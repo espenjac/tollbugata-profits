@@ -1251,6 +1251,12 @@ details.candidate-card[open] > summary::after {
   font-size: 0.78rem;
 }
 
+.trendline-expand {
+  justify-self: start;
+  min-height: 2.25rem;
+  font-size: 0.78rem;
+}
+
 .trendline-table td:first-child {
   min-width: 12rem;
 }

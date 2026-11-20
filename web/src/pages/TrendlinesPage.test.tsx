@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render } from "@testing-library/react";
+import { fireEvent, render, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { MarketSnapshot } from "../core/snapshot";
 import type { Stock } from "../core/types";
@@ -113,5 +113,22 @@ describe("TrendlinesPage", () => {
 
     expect(text).toContain("Historiske dagsbunner mangler");
     expect(text).toContain("Mangler historikk");
+  });
+
+  it("shows the five highest-scoring setups per category before expanding", () => {
+    mockState.snapshot = snapshot(
+      Array.from({ length: 3 }, (_, index) => ({
+        ...makeStock(),
+        ticker: `TEST${index}`,
+      })),
+    );
+    const { container } = render(<TrendlinesPage />);
+    const group = within(
+      container.querySelector('[aria-label="Nærmer seg trendlinjen"]')!,
+    );
+
+    expect(group.getAllByRole("row")).toHaveLength(6);
+    fireEvent.click(group.getByRole("button", { name: "Vis alle 9 oppsett" }));
+    expect(group.getAllByRole("row")).toHaveLength(10);
   });
 });
