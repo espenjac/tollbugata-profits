@@ -1233,6 +1233,80 @@ details.candidate-card[open] > summary::after {
 
 .trendline-panel .panel-heading {
   margin-bottom: 0;
+  position: relative;
+}
+
+.trendline-help {
+  position: relative;
+  z-index: 5;
+  flex: 0 0 auto;
+}
+
+.trendline-help > summary {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 800;
+  cursor: pointer;
+  list-style: none;
+}
+
+.trendline-help > summary::-webkit-details-marker {
+  display: none;
+}
+
+.trendline-help > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.trendline-help-popover {
+  position: absolute;
+  top: calc(100% + 0.55rem);
+  right: 0;
+  width: min(38rem, calc(100vw - 2.5rem));
+  max-height: min(70vh, 38rem);
+  overflow: auto;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.trendline-help-popover h3 {
+  margin: 0 0 0.7rem;
+}
+
+.trendline-help-popover dl {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+}
+
+.trendline-help-popover dl > div {
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.8fr) minmax(0, 2fr);
+  gap: 0.75rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--border-soft);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.trendline-help-popover dt {
+  color: var(--text-strong);
+  font-weight: 700;
+}
+
+.trendline-help-popover dd {
+  margin: 0;
+  color: var(--muted);
 }
 
 .trendline-group {

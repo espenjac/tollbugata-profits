@@ -112,6 +112,21 @@ describe("TrendlinesPage", () => {
     expect(text).toContain("10,0 %");
   });
 
+  it("opens the column explanation popup", () => {
+    const { container } = render(<TrendlinesPage />);
+    const trigger = container.querySelector(
+      'summary[aria-label="Forklaring av alle kolonner"]',
+    );
+    expect(trigger).not.toBeNull();
+    fireEvent.click(trigger!);
+
+    const popup = container.querySelector(".trendline-help-popover");
+    expect(popup?.textContent).toContain("Ankerpunkter");
+    expect(popup?.textContent).toContain("Oppside til mål");
+    expect(popup?.textContent).toContain("Snitt til topp");
+    expect(popup?.textContent).toContain("Score");
+  });
+
   it("explains when the market snapshot has no historical lows", () => {
     mockState.snapshot = snapshot([{ ...makeStock(), recentLows: undefined }]);
     const { container } = render(<TrendlinesPage />);

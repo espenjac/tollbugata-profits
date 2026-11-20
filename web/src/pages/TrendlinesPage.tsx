@@ -32,6 +32,24 @@ const TRENDLINE_GROUPS: Array<{
   },
 ];
 
+const TRENDLINE_COLUMN_HELP = [
+  ["Aksje", "Ticker og selskapsnavn. Tickerlenken åpner aksjen hos Nordnet."],
+  ["Periode", "Historikkvinduet brukt til å lete etter trendlinjen: 1, 3 eller 6 måneder."],
+  ["Ankerpunkter", "Datoene for de to svingbunnene linjen er trukket mellom."],
+  ["Oppsett", "Sterkere krever minst 3 treff, 2 % stigning, 8 handledager mellom ankerne og kurs innen 1,5 ATR. Ellers merkes oppsettet svakere."],
+  ["Kurs", "Siste tilgjengelige kurs i markedssnapshotet."],
+  ["Trendlinje", "Estimert støttenivå der den stigende linjen treffer dagens økt."],
+  ["Topper stiger", "Ja når de tre siste bekreftede svingtoppene er høyere enn hverandre; nei hvis de ikke er det."],
+  ["Målområde", "Estimert kanalnivå: støttelinjen pluss medianavstanden fra støtten til historiske svingtopper. Vises bare ved stigende topper."],
+  ["Oppside til mål", "Prosentvis avstand fra siste kurs til målområdet."],
+  ["Snitt til topp", "Gjennomsnittlige handledager fra berøring av støtten til neste bekreftede svingtopp. Krever minst to fullførte perioder; n viser antallet."],
+  ["Avstand", "Prosentvis avstand fra siste kurs til støttelinjen. Positiv verdi betyr at kursen ligger over linjen."],
+  ["ATR/dag", "Gjennomsnittlig sann dagsrange som prosent av kursen; måler bevegelsesrom, ikke retning."],
+  ["1 mnd.", "Avkastning siste måned."],
+  ["Treff", "Antall bekreftede svingbunner nær den beregnede støttelinjen."],
+  ["Score", "Rangeringsscore: nærhet (40), treff (20), linjestigning (15) og ATR (25). Det er ikke en sannsynlighet."],
+] as const;
+
 export function TrendlinesPage() {
   const { snapshot, loading, refreshing, error, refresh } = useTrendlines();
   if (loading && !snapshot) {
@@ -120,6 +138,7 @@ export function TrendlinesPage() {
               stiger.
             </p>
           </div>
+          <TrendlineColumnHelp />
         </div>
         {setups.length === 0 ? (
           <div className="no-trade">
@@ -148,6 +167,27 @@ export function TrendlinesPage() {
         </p>
       </section>
     </div>
+  );
+}
+
+function TrendlineColumnHelp() {
+  return (
+    <details className="trendline-help">
+      <summary aria-label="Forklaring av alle kolonner" title="Forklaring av alle kolonner">
+        <span aria-hidden="true">i</span>
+      </summary>
+      <div className="trendline-help-popover" role="note">
+        <h3>Forklaring av kolonnene</h3>
+        <dl>
+          {TRENDLINE_COLUMN_HELP.map(([term, description]) => (
+            <div key={term}>
+              <dt>{term}</dt>
+              <dd>{description}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </details>
   );
 }
 
